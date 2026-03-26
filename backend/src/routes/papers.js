@@ -10,10 +10,36 @@ const papers = new Map();
 router.post("/upload", upload.single("file"), async (req, res, next) => {
     try {
         if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
         console.log(`\n[Upload] ${req.file.originalname}`);
-        const paper = await ingestPaper(req.file.buffer, req.file.originalname);
-        papers.set(paper.id, paper);
-        res.status(201).json(paper);
+
+        // Generate a temporary paper object immediately
+        const tempId = `paper_${Date.now()}`;
+        const tempPaper = {
+            id: tempId,
+            title: req.file.originalname.replace(".pdf", ""),
+            filename: req.file.originalname,
+            status: "processing",
+            chunkCount: 0,
+            uploadedAt: new Date().toISOString(),
+        };
+
+        papers.set(tempId, tempPaper);
+
+        // Respond immediately
+        res.status(201).json(tempPaper);
+
+        // Process in background
+        ingestPaper(req.file.buffer, req.file.originalname)
+            .then((paper) => {
+                papers.set(tempId, { ...paper, id: tempId, status: "ready" });
+                console.log(`[Upload] ${req.file.originalname} ready ✓`);
+            })
+            .catch((err) => {
+                console.error(`[Upload] Failed:`, err);
+                papers.set(tempId, { ...tempPaper, status: "error" });
+            });
+
     } catch (err) {
         next(err);
     }
