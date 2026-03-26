@@ -7,7 +7,16 @@ let client = null;
 let collection = null;
 
 export async function initChroma() {
-    client = new ChromaClient({ path: CHROMA_URL });
+    client = new ChromaClient({
+        path: CHROMA_URL,
+        auth: {
+            provider: "token",
+            credentials: process.env.CHROMA_API_KEY,
+            tokenHeaderType: "X_CHROMA_TOKEN",
+        },
+        tenant: process.env.CHROMA_TENANT,
+        database: process.env.CHROMA_DATABASE,
+    });
     collection = await client.getOrCreateCollection({
         name: COLLECTION_NAME,
         metadata: { "hnsw:space": "cosine" },
