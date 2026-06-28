@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { usePapers } from "./hooks/usePapers.js";
 import { api } from "./utils/api.js";
 import ReactMarkdown from "react-markdown";
@@ -18,6 +18,9 @@ const Icons = {
     chevron: <polyline points="6 9 12 15 18 9" />,
     settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></>,
     zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
+    wifi: <><path d="M5 12.55a11 11 0 0 1 14.08 0" /><path d="M1.42 9a16 16 0 0 1 21.16 0" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" /></>,
+    wifiOff: <><line x1="1" y1="1" x2="23" y2="23" /><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" /><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" /><path d="M10.71 5.05A16 16 0 0 1 22.56 9" /><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" /></>,
+    clear: <><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-3.13" /></>,
 };
 
 function Spinner({ size = 16 }) {
@@ -28,6 +31,44 @@ function Spinner({ size = 16 }) {
             borderTopColor: "#f59e0b",
             animation: "spin 0.7s linear infinite", flexShrink: 0,
         }} />
+    );
+}
+
+// ── Connection status hook ─────────────────────────────────────────────────
+function useConnectionStatus() {
+    const [status, setStatus] = useState("connecting"); // 'connected' | 'disconnected' | 'connecting'
+
+    const check = useCallback(async () => {
+        try {
+            await api.health();
+            setStatus("connected");
+        } catch {
+            setStatus("disconnected");
+        }
+    }, []);
+
+    useEffect(() => {
+        check();
+        const interval = setInterval(check, 30_000);
+        return () => clearInterval(interval);
+    }, [check]);
+
+    return status;
+}
+
+function ConnectionDot({ status }) {
+    const colors = { connected: "#34d399", disconnected: "#f87171", connecting: "#f59e0b" };
+    const labels = { connected: "Connected", disconnected: "Offline", connecting: "Connecting…" };
+    const color = colors[status];
+    return (
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color, fontFamily: "monospace" }}>
+            <div style={{
+                width: 7, height: 7, borderRadius: "50%", background: color,
+                boxShadow: status === "connected" ? `0 0 6px ${color}` : "none",
+                animation: status === "connecting" ? "pulse 1.5s infinite" : "none",
+            }} />
+            {labels[status]}
+        </div>
     );
 }
 
@@ -191,10 +232,12 @@ function Message({ msg }) {
     );
 }
 
+const INITIAL_MESSAGE = { role: "assistant", content: "Upload research papers on the left, then ask me anything. I'll retrieve the most relevant sections and generate a cited, confidence-scored answer." };
+
 export default function App() {
-    const { papers, uploading, upload, remove } = usePapers();
+    const { papers, uploading, uploadingFile, upload, remove } = usePapers();
     const [selected, setSelected] = useState(new Set());
-    const [messages, setMessages] = useState([{ role: "assistant", content: "Upload research papers on the left, then ask me anything. I'll retrieve the most relevant sections and generate a cited, confidence-scored answer." }]);
+    const [messages, setMessages] = useState([INITIAL_MESSAGE]);
     const [input, setInput] = useState("");
     const [querying, setQuerying] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -202,6 +245,7 @@ export default function App() {
     const [drag, setDrag] = useState(false);
     const chatRef = useRef();
     const inputRef = useRef();
+    const connectionStatus = useConnectionStatus();
 
     useEffect(() => {
         chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
@@ -235,6 +279,10 @@ export default function App() {
         setQuerying(false);
     }
 
+    function clearChat() {
+        setMessages([INITIAL_MESSAGE]);
+    }
+
     const suggestions = ["What is the main contribution?", "Explain the methodology", "What datasets were used?", "What are the key limitations?"];
 
     return (
@@ -264,6 +312,7 @@ export default function App() {
 
             <div style={{ position: "relative", zIndex: 1, display: "flex", height: "100vh", overflow: "hidden" }}>
 
+                {/* ── Sidebar ──────────────────────────────────────────────────────── */}
                 <aside style={{ width: 295, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.015)" }}>
                     <div style={{ padding: "18px 18px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                         <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, color: "#f1f5f9", letterSpacing: "-0.5px" }}>
@@ -274,6 +323,7 @@ export default function App() {
                         </div>
                     </div>
 
+                    {/* Upload area */}
                     <div style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                         <div
                             onDragOver={e => { e.preventDefault(); setDrag(true); }}
@@ -282,8 +332,14 @@ export default function App() {
                             onClick={() => { const i = document.createElement("input"); i.type = "file"; i.accept = ".pdf"; i.multiple = true; i.onchange = e => handleUpload([...e.target.files]); i.click(); }}
                             style={{ border: `2px dashed ${drag ? "#f59e0b" : "rgba(255,255,255,0.1)"}`, borderRadius: 10, padding: "16px 10px", textAlign: "center", cursor: "pointer", background: drag ? "rgba(245,158,11,0.05)" : "transparent", transition: "all 0.2s" }}>
                             {uploading ? (
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#f59e0b", fontSize: 12 }}>
-                                    <Spinner size={14} /> Processing…
+                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, color: "#f59e0b", fontSize: 12 }}>
+                                    <Spinner size={14} />
+                                    <span>Processing…</span>
+                                    {uploadingFile && (
+                                        <span style={{ fontSize: 10, color: "#94a3b8", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                            {uploadingFile}
+                                        </span>
+                                    )}
                                 </div>
                             ) : (
                                 <>
@@ -301,6 +357,7 @@ export default function App() {
                         )}
                     </div>
 
+                    {/* Papers list */}
                     <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
                         <div style={{ fontSize: 9, color: "#475569", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: 10, display: "flex", justifyContent: "space-between" }}>
                             <span>PAPERS</span><span style={{ color: "#f59e0b" }}>{papers.length}</span>
@@ -316,19 +373,40 @@ export default function App() {
                     </div>
                 </aside>
 
+                {/* ── Main ─────────────────────────────────────────────────────────── */}
                 <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                     <header style={{ padding: "13px 24px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.01)" }}>
                         <div>
                             <div style={{ fontWeight: 600, fontSize: 13, color: "#e2e8f0" }}>Research Query Engine</div>
                             <div style={{ fontSize: 10, color: "#475569", fontFamily: "monospace", marginTop: 1 }}>
                                 {selected.size > 0 ? `Scoped to ${selected.size}/${papers.length} papers` : `All ${papers.length} papers`}
-                                {" · "}<span style={{ color: "#34d399" }}>●</span> Groq · Free
                             </div>
                         </div>
-                        <button onClick={() => setSettingsOpen(!settingsOpen)}
-                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: settingsOpen ? "rgba(245,158,11,0.12)" : "rgba(255,255,255,0.05)", border: `1px solid ${settingsOpen ? "rgba(245,158,11,0.3)" : "rgba(255,255,255,0.1)"}`, borderRadius: 7, cursor: "pointer", color: "#94a3b8", fontSize: 11, fontFamily: "monospace", transition: "all 0.2s" }}>
-                            <Ic d={Icons.settings} size={12} /> Pipeline Config
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            {/* Connection status */}
+                            <ConnectionDot status={connectionStatus} />
+
+                            {/* Clear chat */}
+                            {messages.length > 1 && (
+                                <button
+                                    id="clear-chat-btn"
+                                    onClick={clearChat}
+                                    title="Clear conversation"
+                                    style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 7, cursor: "pointer", color: "#475569", fontSize: 10, fontFamily: "monospace", transition: "all 0.2s" }}
+                                    onMouseEnter={e => { e.currentTarget.style.color = "#f87171"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.3)"; }}
+                                    onMouseLeave={e => { e.currentTarget.style.color = "#475569"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}>
+                                    <Ic d={Icons.clear} size={11} /> CLEAR
+                                </button>
+                            )}
+
+                            {/* Pipeline config */}
+                            <button
+                                id="pipeline-config-btn"
+                                onClick={() => setSettingsOpen(!settingsOpen)}
+                                style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: settingsOpen ? "rgba(245,158,11,0.12)" : "rgba(255,255,255,0.05)", border: `1px solid ${settingsOpen ? "rgba(245,158,11,0.3)" : "rgba(255,255,255,0.1)"}`, borderRadius: 7, cursor: "pointer", color: "#94a3b8", fontSize: 11, fontFamily: "monospace", transition: "all 0.2s" }}>
+                                <Ic d={Icons.settings} size={12} /> Pipeline Config
+                            </button>
+                        </div>
                     </header>
 
                     {settingsOpen && (
@@ -349,6 +427,7 @@ export default function App() {
                         </div>
                     )}
 
+                    {/* Chat area */}
                     <div ref={chatRef} style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
                         {messages.map((m, i) => <Message key={i} msg={m} />)}
                         {querying && (
@@ -374,17 +453,22 @@ export default function App() {
                         )}
                     </div>
 
+                    {/* Input bar */}
                     <div style={{ padding: "14px 24px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
                             <div style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "11px 14px", transition: "border-color 0.2s" }}
                                 onFocusCapture={e => e.currentTarget.style.borderColor = "rgba(245,158,11,0.45)"}
                                 onBlurCapture={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"}>
-                                <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+                                <textarea
+                                    id="query-input"
+                                    ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
                                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleQuery(); } }}
                                     placeholder="Ask about methodology, findings, comparisons… (Enter to send)"
                                     rows={1} style={{ width: "100%", background: "none", border: "none", color: "#e2e8f0", fontSize: 13, lineHeight: 1.5 }} />
                             </div>
-                            <button onClick={handleQuery} disabled={!input.trim() || querying}
+                            <button
+                                id="send-query-btn"
+                                onClick={handleQuery} disabled={!input.trim() || querying}
                                 style={{ width: 42, height: 42, borderRadius: 10, border: "none", cursor: "pointer", background: !input.trim() || querying ? "rgba(245,158,11,0.2)" : "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s", color: "#000" }}
                                 onMouseDown={e => { if (!querying && input.trim()) e.currentTarget.style.transform = "scale(0.92)"; }}
                                 onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}>
@@ -400,4 +484,3 @@ export default function App() {
         </>
     );
 }
-

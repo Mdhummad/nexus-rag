@@ -9,15 +9,26 @@ import healthRouter from "./routes/health.js";
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Allow requests from any Vercel preview URL or a configured origin list
+const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+    : ["http://localhost:5173", "http://localhost:3000"];
+
 app.use(cors({
-    origin: process.env.CORS_ORIGIN?.split(",") || [
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
+    origin: (origin, cb) => {
+        // Allow requests with no origin (e.g. curl, Render health checks)
+        if (!origin) return cb(null, true);
+        // Allow any vercel.app subdomain for preview deployments
+        if (origin.endsWith(".vercel.app") || allowedOrigins.includes(origin)) {
+            return cb(null, true);
+        }
+        cb(new Error(`CORS: origin "${origin}" not allowed`));
+    },
     credentials: true,
 }));
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
+
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 app.use((req, _res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
@@ -39,6 +50,8 @@ app.use((err, _req, res, _next) => {
     });
 });
 
+let server;
+
 async function boot() {
     try {
         console.log("\n╔══════════════════════════════════════╗");
@@ -47,9 +60,8 @@ async function boot() {
 
         console.log("[1/2] Initializing ChromaDB...");
         await initChroma();
-        console.log("      ChromaDB ready ✓");
 
-        app.listen(PORT, () => {
+        server = app.listen(PORT, () => {
             console.log(`\n[2/2] Server running → http://localhost:${PORT}`);
             console.log(`      Health check  → http://localhost:${PORT}/api/health`);
             console.log(`      LLM model     → ${process.env.LLM_MODEL || "llama-3.1-8b-instant"} (Groq)`);
@@ -60,5 +72,19 @@ async function boot() {
         process.exit(1);
     }
 }
+
+// Graceful shutdown for Render SIGTERM
+function shutdown(signal) {
+    console.log(`\n[${signal}] Shutting down gracefully...`);
+    server?.close(() => {
+        console.log("HTTP server closed.");
+        process.exit(0);
+    });
+    // Force exit after 10s
+    setTimeout(() => process.exit(1), 10_000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 boot();

@@ -1,0 +1,60 @@
+services:
+  # ── ChromaDB Vector Database ──────────────────────────────────────────────
+  - type: web
+    name: nexus-rag-chroma
+    runtime: docker
+    dockerCommand: "chromadb run --host 0.0.0.0 --port 8000 --path /chroma/chroma"
+    image:
+      url: docker.io/chromadb/chroma:latest
+    disk:
+      name: chroma-data
+      mountPath: /chroma/chroma
+      sizeGB: 1
+    envVars:
+      - key: ANONYMIZED_TELEMETRY
+        value: "false"
+      - key: ALLOW_RESET
+        value: "false"
+
+  # ── Node.js Backend ───────────────────────────────────────────────────────
+  - type: web
+    name: nexus-rag-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node src/server.js
+    disk:
+      name: papers-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: GROQ_API_KEY
+        sync: false          # Set this manually in Render dashboard
+      - key: LLM_MODEL
+        value: llama-3.1-8b-instant
+      - key: EMBEDDING_MODEL
+        value: Xenova/all-MiniLM-L6-v2
+      - key: CHROMA_URL
+        fromService:
+          name: nexus-rag-chroma
+          type: web
+          property: host
+          envVarKey: CHROMA_INTERNAL_URL
+      - key: CHROMA_COLLECTION
+        value: research_papers
+      - key: CHUNK_SIZE
+        value: "1000"
+      - key: CHUNK_OVERLAP
+        value: "200"
+      - key: TOP_K
+        value: "5"
+      - key: RERANK_TOP_K
+        value: "3"
+      - key: MAX_FILE_SIZE_MB
+        value: "50"
+      - key: CORS_ORIGIN
+        sync: false          # Set to your Vercel frontend URL, e.g. https://nexus-rag.vercel.app

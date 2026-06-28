@@ -4,6 +4,7 @@ import { api } from "../utils/api.js";
 export function usePapers() {
     const [papers, setPapers] = useState([]);
     const [uploading, setUploading] = useState(false);
+    const [uploadingFile, setUploadingFile] = useState(null);
     const [error, setError] = useState(null);
 
     useEffect(() => {
@@ -12,6 +13,7 @@ export function usePapers() {
 
     const upload = useCallback(async (file) => {
         setUploading(true);
+        setUploadingFile(file.name);
         setError(null);
         try {
             const paper = await api.uploadPaper(file);
@@ -22,6 +24,7 @@ export function usePapers() {
             throw e;
         } finally {
             setUploading(false);
+            setUploadingFile(null);
         }
     }, []);
 
@@ -30,5 +33,5 @@ export function usePapers() {
         setPapers((prev) => prev.filter((p) => p.id !== id));
     }, []);
 
-    return { papers, uploading, error, upload, remove };
+    return { papers, uploading, uploadingFile, error, upload, remove };
 }

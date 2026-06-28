@@ -1,20 +1,24 @@
-# Dependencies
+# ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
-backend/node_modules/
-frontend/node_modules/
 
-# Environment variables (NEVER upload your API key!)
+# ── Environment variables (NEVER commit real secrets) ─────────────────────────
 .env
-backend/.env
+.env.local
+.env.*.local
 
-# Logs
-*.log
-npm-debug.log*
+# ── Persistent paper metadata (regenerated at runtime) ────────────────────────
+data/
 
-# OS files
+# ── OS / Editor artifacts ─────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+*.lnk
 
-# Build output
+# ── Build artifacts ───────────────────────────────────────────────────────────
 dist/
 build/
+.vite/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
