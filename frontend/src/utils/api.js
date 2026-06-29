@@ -2,9 +2,10 @@ const BASE = import.meta.env.VITE_API_URL
     ? `${import.meta.env.VITE_API_URL}/api`
     : "/api";
 
-async function req(method, path, body) {
+async function req(method, path, body, signal) {
     const opts = {
         method,
+        signal,   // ← supports AbortController
         headers: body instanceof FormData ? {} : { "Content-Type": "application/json" },
         body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
     };
@@ -17,10 +18,10 @@ async function req(method, path, body) {
 }
 
 export const api = {
-    health: () => req("GET", "/health"),
-    getPapers: () => req("GET", "/papers"),
-    uploadPaper: (file) => { const fd = new FormData(); fd.append("file", file); return req("POST", "/papers/upload", fd); },
-    deletePaper: (id) => req("DELETE", `/papers/${id}`),
-    analyzePaper: (id, analysisType) => req("POST", `/papers/${id}/analyze`, { analysisType }),
-    query: (body) => req("POST", "/query", body),
+    health:       ()              => req("GET",    "/health"),
+    getPapers:    ()              => req("GET",    "/papers"),
+    uploadPaper:  (file)          => { const fd = new FormData(); fd.append("file", file); return req("POST", "/papers/upload", fd); },
+    deletePaper:  (id)            => req("DELETE", `/papers/${id}`),
+    analyzePaper: (id, type)      => req("POST",   `/papers/${id}/analyze`, { analysisType: type }),
+    query:        (body, signal)  => req("POST",   "/query", body, signal),
 };

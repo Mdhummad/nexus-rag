@@ -34,6 +34,34 @@ async function extractMetadata(text) {
     }
 }
 
+/**
+ * Extract real per-page text from a PDF buffer.
+ * Uses pdf-parse's pagerender callback to capture each page's content separately,
+ * so chunk metadata carries accurate page numbers.
+ */
+async function extractPages(buffer) {
+    const pages = [];
+
+    const options = {
+        pagerender: function (pageData) {
+            return pageData.getTextContent().then((textContent) => {
+                const text = textContent.items.map((item) => item.str).join(" ");
+                pages.push({ pageNum: pageData.pageNumber, text });
+                return text;
+            });
+        },
+    };
+
+    const parsed = await pdfParse(buffer, options);
+
+    // Fallback: if pagerender didn't fire (some PDF builds), use full text as page 1
+    if (pages.length === 0) {
+        pages.push({ pageNum: 1, text: parsed.text });
+    }
+
+    return { pages, totalPages: parsed.numpages, fullText: parsed.text };
+}
+
 async function chunkText(pages, paperId, paperTitle, filename) {
     const splitter = new RecursiveCharacterTextSplitter({
         chunkSize: CHUNK_SIZE,
@@ -45,6 +73,7 @@ async function chunkText(pages, paperId, paperTitle, filename) {
     let chunkIndex = 0;
 
     for (const { pageNum, text } of pages) {
+        if (!text.trim()) continue;
         const pageChunks = await splitter.splitText(text);
         for (const content of pageChunks) {
             if (content.trim().length < 50) continue;
@@ -57,7 +86,7 @@ async function chunkText(pages, paperId, paperTitle, filename) {
                     paper_id: paperId,
                     paper_title: paperTitle,
                     filename,
-                    page: pageNum,
+                    page: pageNum,           // ← real page number now
                     chunk_index: chunkIndex,
                 },
             });
@@ -78,6 +107,8 @@ async function embedAndStore(chunks) {
     for (let i = 0; i < chunks.length; i += BATCH) {
         const batch = chunks.slice(i, i + BATCH);
         const texts = batch.map((c) => c.content);
+
+        // Embed entire batch at once (not one-by-one)
         const embeddings = await embedder.embedDocuments(texts);
 
         await collection.upsert({
@@ -97,11 +128,7 @@ export async function ingestPaper(fileBuffer, filename) {
     const paperId = uuid();
 
     console.log(`\n  Parsing ${filename}...`);
-    const parsed = await pdfParse(fileBuffer);
-    const fullText = parsed.text;
-    const totalPages = parsed.numpages;
-
-    const pages = [{ pageNum: 1, text: fullText }];
+    const { pages, totalPages, fullText } = await extractPages(fileBuffer);
 
     console.log("  Extracting metadata...");
     const meta = await extractMetadata(fullText);
@@ -109,7 +136,7 @@ export async function ingestPaper(fileBuffer, filename) {
 
     console.log("  Chunking text...");
     const chunks = await chunkText(pages, paperId, paperTitle, filename);
-    console.log(`  Created ${chunks.length} chunks`);
+    console.log(`  Created ${chunks.length} chunks across ${totalPages} pages`);
 
     console.log("  Embedding chunks...");
     const totalChunks = await embedAndStore(chunks);

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import { initChroma } from "./services/chromaService.js";
 import papersRouter from "./routes/papers.js";
 import queryRouter from "./routes/query.js";
@@ -9,44 +10,51 @@ import healthRouter from "./routes/health.js";
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Allow requests from any Vercel preview URL or a configured origin list
+// ── Security headers ──────────────────────────────────────────────────────────
+app.use(helmet());
+
+// ── CORS — strict explicit allow-list only ────────────────────────────────────
 const allowedOrigins = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
     : ["http://localhost:5173", "http://localhost:3000"];
 
 app.use(cors({
     origin: (origin, cb) => {
-        // Allow requests with no origin (e.g. curl, Render health checks)
+        // Allow requests with no origin (Render health checks, curl)
         if (!origin) return cb(null, true);
-        // Allow any vercel.app subdomain for preview deployments
-        if (origin.endsWith(".vercel.app") || allowedOrigins.includes(origin)) {
-            return cb(null, true);
-        }
+        if (allowedOrigins.includes(origin)) return cb(null, true);
         cb(new Error(`CORS: origin "${origin}" not allowed`));
     },
     credentials: true,
 }));
 
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+// ── Body parsing — conservative limits ───────────────────────────────────────
+app.use(express.json({ limit: "1mb" }));          // JSON body: 1 MB max
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
+// ── Request logger ────────────────────────────────────────────────────────────
 app.use((req, _res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
     next();
 });
 
+// ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api/health", healthRouter);
 app.use("/api/papers", papersRouter);
 app.use("/api/query", queryRouter);
 
+// ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {
     res.status(404).json({ error: "Route not found" });
 });
 
+// ── Global error handler ──────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
-    console.error("[Error]", err);
+    console.error("[Error]", err.message);
+    // Never leak stack traces to clients in production
+    const isProd = process.env.NODE_ENV === "production";
     res.status(err.status || 500).json({
-        error: err.message || "Internal server error",
+        error: isProd ? "Internal server error" : (err.message || "Internal server error"),
     });
 });
 
@@ -73,14 +81,13 @@ async function boot() {
     }
 }
 
-// Graceful shutdown for Render SIGTERM
+// ── Graceful shutdown for Render SIGTERM ──────────────────────────────────────
 function shutdown(signal) {
     console.log(`\n[${signal}] Shutting down gracefully...`);
     server?.close(() => {
         console.log("HTTP server closed.");
         process.exit(0);
     });
-    // Force exit after 10s
     setTimeout(() => process.exit(1), 10_000).unref();
 }
 

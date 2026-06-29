@@ -22,13 +22,15 @@ export async function expandQuery(question) {
         const raw = await chain.invoke({ question });
         const cleaned = raw.replace(/```(?:json)?|```/g, "").trim();
         const expansions = JSON.parse(cleaned);
-        return [question, ...expansions];
+        if (!Array.isArray(expansions)) return [question];
+        return [question, ...expansions.slice(0, 2)];
     } catch {
         return [question];
     }
 }
 
 function cosineSim(a, b) {
+    if (!a?.length || !b?.length || a.length !== b.length) return 0;
     let dot = 0, normA = 0, normB = 0;
     for (let i = 0; i < a.length; i++) {
         dot += a[i] * b[i];
@@ -81,12 +83,14 @@ export async function llmRerank(question, chunks, topK) {
             try {
                 const raw = await chain.invoke({
                     question,
-                    passage: chunk.content.slice(0, 600),
+                    // Use full chunk content for accurate reranking (not truncated)
+                    passage: chunk.content.slice(0, 1000),
                 });
-                const { score } = JSON.parse(raw.replace(/```(?:json)?|```/g, "").trim());
-                return { ...chunk, rerankScore: parseFloat(score) || 0.5 };
+                const parsed = JSON.parse(raw.replace(/```(?:json)?|```/g, "").trim());
+                const score = parseFloat(parsed?.score);
+                return { ...chunk, rerankScore: isNaN(score) ? 0.5 : Math.min(Math.max(score, 0), 1) };
             } catch {
-                return { ...chunk, rerankScore: chunk.distanceScore || 0.5 };
+                return { ...chunk, rerankScore: chunk.distanceScore ?? 0.5 };
             }
         })
     );
@@ -110,12 +114,15 @@ export async function retrieveChunks(question, queries, paperIds, topK, useMMR) 
         const results = await collection.query({
             queryEmbeddings: [qEmb],
             nResults: Math.min(topK * 2, 20),
-            include: ["documents", "metadatas", "distances"],
+            // ── FIX: include embeddings so MMR has real vectors to compare ──
+            include: ["documents", "metadatas", "distances", "embeddings"],
+            ...(where ? { where } : {}),
         });
 
         const docs = results.documents[0];
         const metas = results.metadatas[0];
         const dists = results.distances[0];
+        const embs = results.embeddings?.[0] ?? [];   // real embedding vectors
 
         for (let i = 0; i < docs.length; i++) {
             const chunkId = metas[i].chunk_id;
@@ -126,7 +133,7 @@ export async function retrieveChunks(question, queries, paperIds, topK, useMMR) 
                     content: docs[i],
                     metadata: metas[i],
                     distanceScore: 1 - dists[i],
-                    embedding: [],
+                    embedding: embs[i] ?? [],  // ← real embedding, MMR now works
                 });
             }
         }
@@ -178,26 +185,39 @@ export async function runRAGPipeline({
     useReranking = true,
 }) {
     const start = Date.now();
+    const timings = {};
 
+    // 1. Query Expansion
     let queries = [question];
     let expandedQueries = null;
     if (useQueryExpansion) {
+        const t = Date.now();
         queries = await expandQuery(question);
         expandedQueries = queries.slice(1);
+        timings.expansion = Date.now() - t;
     }
 
+    // 2. Retrieval
+    const t2 = Date.now();
     let chunks = await retrieveChunks(question, queries, paperIds, topK, useMMR);
+    timings.retrieval = Date.now() - t2;
 
+    // 3. Re-ranking
     if (useReranking && chunks.length > RERANK_TOP_K) {
+        const t3 = Date.now();
         chunks = await llmRerank(question, chunks, RERANK_TOP_K);
+        timings.reranking = Date.now() - t3;
     } else {
         chunks = chunks.slice(0, RERANK_TOP_K);
     }
 
+    // 4. Answer generation
+    const t4 = Date.now();
     const context = buildContext(chunks);
     const llm = getLLM({ temperature: 0 });
     const chain = ANSWER_PROMPT.pipe(llm).pipe(new StringOutputParser());
     const answer = await chain.invoke({ context, question });
+    timings.generation = Date.now() - t4;
 
     return {
         question,
@@ -214,5 +234,6 @@ export async function runRAGPipeline({
         expandedQueries,
         confidence: parseFloat(computeConfidence(chunks).toFixed(3)),
         processingTimeMs: Date.now() - start,
+        timings,   // per-step breakdown
     };
 }

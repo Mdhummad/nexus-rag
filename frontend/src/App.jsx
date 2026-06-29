@@ -1,7 +1,12 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useId } from "react";
 import { usePapers } from "./hooks/usePapers.js";
 import { api } from "./utils/api.js";
 import ReactMarkdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
+
+// ── Tiny unique ID helper for messages ───────────────────────────────────────
+let _msgId = 0;
+const newId = () => `msg_${++_msgId}`;
 
 function Ic({ d, size = 16, stroke = 1.8 }) {
     return (
@@ -18,9 +23,8 @@ const Icons = {
     chevron: <polyline points="6 9 12 15 18 9" />,
     settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></>,
     zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
-    wifi: <><path d="M5 12.55a11 11 0 0 1 14.08 0" /><path d="M1.42 9a16 16 0 0 1 21.16 0" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" /></>,
-    wifiOff: <><line x1="1" y1="1" x2="23" y2="23" /><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" /><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" /><path d="M10.71 5.05A16 16 0 0 1 22.56 9" /><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" /></>,
     clear: <><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-3.13" /></>,
+    x: <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>,
 };
 
 function Spinner({ size = 16 }) {
@@ -34,25 +38,52 @@ function Spinner({ size = 16 }) {
     );
 }
 
+// ── Toast notification system (replaces alert()) ──────────────────────────────
+function Toast({ toasts, remove }) {
+    if (!toasts.length) return null;
+    return (
+        <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
+            {toasts.map((t) => (
+                <div key={t.id} style={{
+                    background: t.type === "error" ? "rgba(248,113,113,0.15)" : "rgba(52,211,153,0.12)",
+                    border: `1px solid ${t.type === "error" ? "rgba(248,113,113,0.4)" : "rgba(52,211,153,0.4)"}`,
+                    borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center",
+                    gap: 10, fontSize: 12, color: t.type === "error" ? "#f87171" : "#34d399",
+                    maxWidth: 320, animation: "fadeUp 0.3s ease", backdropFilter: "blur(8px)",
+                }}>
+                    <span style={{ flex: 1 }}>{t.message}</span>
+                    <button onClick={() => remove(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 2, opacity: 0.6 }}>
+                        <Ic d={Icons.x} size={12} />
+                    </button>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function useToasts() {
+    const [toasts, setToasts] = useState([]);
+    const add = useCallback((message, type = "error") => {
+        const id = newId();
+        setToasts((prev) => [...prev, { id, message, type }]);
+        setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
+    }, []);
+    const remove = useCallback((id) => setToasts((prev) => prev.filter((t) => t.id !== id)), []);
+    return { toasts, add, remove };
+}
+
 // ── Connection status hook ─────────────────────────────────────────────────
 function useConnectionStatus() {
-    const [status, setStatus] = useState("connecting"); // 'connected' | 'disconnected' | 'connecting'
-
+    const [status, setStatus] = useState("connecting");
     const check = useCallback(async () => {
-        try {
-            await api.health();
-            setStatus("connected");
-        } catch {
-            setStatus("disconnected");
-        }
+        try { await api.health(); setStatus("connected"); }
+        catch { setStatus("disconnected"); }
     }, []);
-
     useEffect(() => {
         check();
         const interval = setInterval(check, 30_000);
         return () => clearInterval(interval);
     }, [check]);
-
     return status;
 }
 
@@ -112,7 +143,7 @@ function SourceCard({ src, idx }) {
     );
 }
 
-function PaperItem({ paper, selected, onToggle, onRemove, onAnalyze }) {
+function PaperItem({ paper, selected, onToggle, onRemove, onAnalyze, onToast }) {
     const [analysisType, setAnalysisType] = useState("");
     const [analysisResult, setAnalysisResult] = useState(null);
     const [analyzing, setAnalyzing] = useState(false);
@@ -125,8 +156,11 @@ function PaperItem({ paper, selected, onToggle, onRemove, onAnalyze }) {
         try {
             const r = await onAnalyze(paper.id, type);
             setAnalysisResult(r.content);
-        } catch (e) { setAnalysisResult("Error: " + e.message); }
-        finally { setAnalyzing(false); }
+        } catch (e) {
+            onToast("Analysis failed: " + e.message, "error");
+        } finally {
+            setAnalyzing(false);
+        }
     }
 
     return (
@@ -185,6 +219,12 @@ function PaperItem({ paper, selected, onToggle, onRemove, onAnalyze }) {
     );
 }
 
+// ── rehypeSanitize config — allow safe markdown, block script/iframe/etc. ────
+const SANITIZE_SCHEMA = {
+    tagNames: ["p", "strong", "em", "code", "pre", "ul", "ol", "li", "h1", "h2", "h3", "h4", "blockquote", "hr", "br", "a", "table", "thead", "tbody", "tr", "th", "td"],
+    attributes: { a: ["href", "title"], "*": ["className"] },
+};
+
 function Message({ msg }) {
     const isUser = msg.role === "user";
     return (
@@ -196,7 +236,10 @@ function Message({ msg }) {
                 <div style={{ maxWidth: "80%", background: isUser ? "#f59e0b" : "rgba(255,255,255,0.04)", border: isUser ? "none" : "1px solid rgba(255,255,255,0.08)", borderRadius: isUser ? "16px 16px 4px 16px" : "4px 16px 16px 16px", padding: "12px 16px", fontSize: 13, lineHeight: 1.8, color: isUser ? "#000" : "#cbd5e1", fontWeight: isUser ? 600 : 400 }}>
                     {isUser ? msg.content : (
                         <div className="prose" style={{ fontSize: 13, lineHeight: 1.8 }}>
-                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            {/* rehypeSanitize prevents XSS from LLM-generated HTML */}
+                            <ReactMarkdown rehypePlugins={[[rehypeSanitize, SANITIZE_SCHEMA]]}>
+                                {msg.content}
+                            </ReactMarkdown>
                         </div>
                     )}
                 </div>
@@ -204,7 +247,12 @@ function Message({ msg }) {
             {!isUser && msg.data && (
                 <div style={{ maxWidth: "80%", marginTop: 12 }}>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                        {[`⏱ ${msg.data.processingTimeMs}ms`, `📎 ${msg.data.sources?.length} sources`, msg.data.expandedQueries?.length && `🔀 ${msg.data.expandedQueries.length} expansions`].filter(Boolean).map(l => (
+                        {[
+                            `⏱ ${msg.data.processingTimeMs}ms`,
+                            `📎 ${msg.data.sources?.length} sources`,
+                            msg.data.expandedQueries?.length && `🔀 ${msg.data.expandedQueries.length} expansions`,
+                            msg.data.timings?.retrieval && `🔍 ${msg.data.timings.retrieval}ms retrieval`,
+                        ].filter(Boolean).map(l => (
                             <span key={l} style={{ fontSize: 10, color: "#475569", fontFamily: "monospace", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 5, padding: "3px 8px" }}>{l}</span>
                         ))}
                     </div>
@@ -223,7 +271,7 @@ function Message({ msg }) {
                     {msg.data.sources?.length > 0 && (
                         <div>
                             <div style={{ fontSize: 9, color: "#475569", fontFamily: "monospace", marginBottom: 5, letterSpacing: "0.08em" }}>RETRIEVED SOURCES</div>
-                            {msg.data.sources.map((s, i) => <SourceCard key={i} src={s} idx={i + 1} />)}
+                            {msg.data.sources.map((s, i) => <SourceCard key={s.chunkIndex ?? i} src={s} idx={i + 1} />)}
                         </div>
                     )}
                 </div>
@@ -232,10 +280,16 @@ function Message({ msg }) {
     );
 }
 
-const INITIAL_MESSAGE = { role: "assistant", content: "Upload research papers on the left, then ask me anything. I'll retrieve the most relevant sections and generate a cited, confidence-scored answer." };
+const INITIAL_MESSAGE = {
+    id: "msg_0",
+    role: "assistant",
+    content: "Upload research papers on the left, then ask me anything. I'll retrieve the most relevant sections and generate a cited, confidence-scored answer.",
+};
+const MAX_QUESTION_LENGTH = 2000;
 
 export default function App() {
-    const { papers, uploading, uploadingFile, upload, remove } = usePapers();
+    const { papers, uploading, uploadingFile, upload, remove, error: uploadError } = usePapers();
+    const { toasts, add: addToast, remove: removeToast } = useToasts();
     const [selected, setSelected] = useState(new Set());
     const [messages, setMessages] = useState([INITIAL_MESSAGE]);
     const [input, setInput] = useState("");
@@ -245,11 +299,20 @@ export default function App() {
     const [drag, setDrag] = useState(false);
     const chatRef = useRef();
     const inputRef = useRef();
+    const abortRef = useRef(null);    // ← abort controller for in-flight queries
     const connectionStatus = useConnectionStatus();
+
+    // Surface upload errors as toasts
+    useEffect(() => {
+        if (uploadError) addToast(uploadError, "error");
+    }, [uploadError, addToast]);
 
     useEffect(() => {
         chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
     }, [messages, querying]);
+
+    // Cleanup abort controller on unmount
+    useEffect(() => () => abortRef.current?.abort(), []);
 
     function togglePaper(id) {
         setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -259,7 +322,9 @@ export default function App() {
         for (const f of files) {
             if (f.name.endsWith(".pdf")) {
                 try { await upload(f); }
-                catch (e) { alert("Upload failed: " + e.message); }
+                catch (e) { addToast("Upload failed: " + e.message, "error"); }
+            } else {
+                addToast(`"${f.name}" is not a PDF — only PDF files are supported.`, "error");
             }
         }
     }
@@ -267,23 +332,44 @@ export default function App() {
     async function handleQuery() {
         const q = input.trim();
         if (!q || querying) return;
+        if (q.length > MAX_QUESTION_LENGTH) {
+            addToast(`Question too long (${q.length}/${MAX_QUESTION_LENGTH} chars)`, "error");
+            return;
+        }
+
+        // Cancel any previous in-flight request
+        abortRef.current?.abort();
+        abortRef.current = new AbortController();
+
         setInput("");
-        setMessages(prev => [...prev, { role: "user", content: q }]);
+        setMessages(prev => [...prev, { id: newId(), role: "user", content: q }]);
         setQuerying(true);
         try {
-            const data = await api.query({ question: q, paperIds: selected.size > 0 ? [...selected] : null, topK: cfg.topK, useMMR: cfg.useMMR, useQueryExpansion: cfg.useQueryExpansion, useReranking: cfg.useReranking });
-            setMessages(prev => [...prev, { role: "assistant", content: data.answer, data }]);
+            const data = await api.query({
+                question: q,
+                paperIds: selected.size > 0 ? [...selected] : null,
+                topK: cfg.topK,
+                useMMR: cfg.useMMR,
+                useQueryExpansion: cfg.useQueryExpansion,
+                useReranking: cfg.useReranking,
+            }, abortRef.current.signal);
+            setMessages(prev => [...prev, { id: newId(), role: "assistant", content: data.answer, data }]);
         } catch (e) {
-            setMessages(prev => [...prev, { role: "assistant", content: `**Error:** ${e.message}` }]);
+            if (e.name === "AbortError") return;   // request was intentionally cancelled
+            setMessages(prev => [...prev, { id: newId(), role: "assistant", content: `**Error:** ${e.message}` }]);
+        } finally {
+            setQuerying(false);
         }
-        setQuerying(false);
     }
 
     function clearChat() {
+        abortRef.current?.abort();
+        setQuerying(false);
         setMessages([INITIAL_MESSAGE]);
     }
 
     const suggestions = ["What is the main contribution?", "Explain the methodology", "What datasets were used?", "What are the key limitations?"];
+    const charsLeft = MAX_QUESTION_LENGTH - input.length;
 
     return (
         <>
@@ -305,14 +391,19 @@ export default function App() {
         .prose p:last-child{margin-bottom:0}
         .prose strong{color:#f1f5f9;font-weight:600}
         .prose code{background:rgba(245,158,11,0.1);color:#f59e0b;padding:1px 5px;border-radius:3px;font-size:12px}
+        .prose a{color:#f59e0b;text-decoration:underline}
+        .prose ul,.prose ol{padding-left:1.25em;margin-bottom:0.75em}
+        .prose blockquote{border-left:3px solid rgba(245,158,11,0.4);padding-left:10px;color:#94a3b8;margin:0.5em 0}
       `}</style>
+
+            <Toast toasts={toasts} remove={removeToast} />
 
             <div style={{ position: "fixed", inset: 0, pointerEvents: "none", backgroundImage: "linear-gradient(rgba(245,158,11,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(245,158,11,0.02) 1px,transparent 1px)", backgroundSize: "48px 48px" }} />
             <div style={{ position: "fixed", top: -150, right: "15%", width: 500, height: 500, background: "radial-gradient(circle,rgba(245,158,11,0.06) 0%,transparent 65%)", pointerEvents: "none" }} />
 
             <div style={{ position: "relative", zIndex: 1, display: "flex", height: "100vh", overflow: "hidden" }}>
 
-                {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+                {/* ── Sidebar ─────────────────────────────────────────────────── */}
                 <aside style={{ width: 295, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.015)" }}>
                     <div style={{ padding: "18px 18px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                         <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, color: "#f1f5f9", letterSpacing: "-0.5px" }}>
@@ -323,7 +414,6 @@ export default function App() {
                         </div>
                     </div>
 
-                    {/* Upload area */}
                     <div style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                         <div
                             onDragOver={e => { e.preventDefault(); setDrag(true); }}
@@ -332,11 +422,11 @@ export default function App() {
                             onClick={() => { const i = document.createElement("input"); i.type = "file"; i.accept = ".pdf"; i.multiple = true; i.onchange = e => handleUpload([...e.target.files]); i.click(); }}
                             style={{ border: `2px dashed ${drag ? "#f59e0b" : "rgba(255,255,255,0.1)"}`, borderRadius: 10, padding: "16px 10px", textAlign: "center", cursor: "pointer", background: drag ? "rgba(245,158,11,0.05)" : "transparent", transition: "all 0.2s" }}>
                             {uploading ? (
-                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, color: "#f59e0b", fontSize: 12 }}>
+                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: "#f59e0b", fontSize: 12 }}>
                                     <Spinner size={14} />
                                     <span>Processing…</span>
                                     {uploadingFile && (
-                                        <span style={{ fontSize: 10, color: "#94a3b8", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        <span style={{ fontSize: 10, color: "#94a3b8", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 8px" }}>
                                             {uploadingFile}
                                         </span>
                                     )}
@@ -357,7 +447,6 @@ export default function App() {
                         )}
                     </div>
 
-                    {/* Papers list */}
                     <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
                         <div style={{ fontSize: 9, color: "#475569", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: 10, display: "flex", justifyContent: "space-between" }}>
                             <span>PAPERS</span><span style={{ color: "#f59e0b" }}>{papers.length}</span>
@@ -368,12 +457,12 @@ export default function App() {
                             </div>
                         )}
                         {papers.map(p => (
-                            <PaperItem key={p.id} paper={p} selected={selected.has(p.id)} onToggle={togglePaper} onRemove={remove} onAnalyze={api.analyzePaper} />
+                            <PaperItem key={p.id} paper={p} selected={selected.has(p.id)} onToggle={togglePaper} onRemove={remove} onAnalyze={api.analyzePaper} onToast={addToast} />
                         ))}
                     </div>
                 </aside>
 
-                {/* ── Main ─────────────────────────────────────────────────────────── */}
+                {/* ── Main ────────────────────────────────────────────────────── */}
                 <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                     <header style={{ padding: "13px 24px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.01)" }}>
                         <div>
@@ -383,26 +472,16 @@ export default function App() {
                             </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            {/* Connection status */}
                             <ConnectionDot status={connectionStatus} />
-
-                            {/* Clear chat */}
                             {messages.length > 1 && (
-                                <button
-                                    id="clear-chat-btn"
-                                    onClick={clearChat}
-                                    title="Clear conversation"
+                                <button id="clear-chat-btn" onClick={clearChat} title="Clear conversation"
                                     style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 7, cursor: "pointer", color: "#475569", fontSize: 10, fontFamily: "monospace", transition: "all 0.2s" }}
                                     onMouseEnter={e => { e.currentTarget.style.color = "#f87171"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.3)"; }}
                                     onMouseLeave={e => { e.currentTarget.style.color = "#475569"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}>
                                     <Ic d={Icons.clear} size={11} /> CLEAR
                                 </button>
                             )}
-
-                            {/* Pipeline config */}
-                            <button
-                                id="pipeline-config-btn"
-                                onClick={() => setSettingsOpen(!settingsOpen)}
+                            <button id="pipeline-config-btn" onClick={() => setSettingsOpen(!settingsOpen)}
                                 style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: settingsOpen ? "rgba(245,158,11,0.12)" : "rgba(255,255,255,0.05)", border: `1px solid ${settingsOpen ? "rgba(245,158,11,0.3)" : "rgba(255,255,255,0.1)"}`, borderRadius: 7, cursor: "pointer", color: "#94a3b8", fontSize: 11, fontFamily: "monospace", transition: "all 0.2s" }}>
                                 <Ic d={Icons.settings} size={12} /> Pipeline Config
                             </button>
@@ -427,9 +506,9 @@ export default function App() {
                         </div>
                     )}
 
-                    {/* Chat area */}
                     <div ref={chatRef} style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
-                        {messages.map((m, i) => <Message key={i} msg={m} />)}
+                        {/* Messages are keyed by stable ID, not array index */}
+                        {messages.map((m) => <Message key={m.id} msg={m} />)}
                         {querying && (
                             <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#f59e0b", fontSize: 11, fontFamily: "monospace", animation: "fadeUp 0.3s ease", marginBottom: 16 }}>
                                 <Spinner size={14} />
@@ -453,7 +532,6 @@ export default function App() {
                         )}
                     </div>
 
-                    {/* Input bar */}
                     <div style={{ padding: "14px 24px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
                             <div style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "11px 14px", transition: "border-color 0.2s" }}
@@ -461,22 +539,29 @@ export default function App() {
                                 onBlurCapture={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"}>
                                 <textarea
                                     id="query-input"
-                                    ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+                                    ref={inputRef} value={input}
+                                    onChange={e => setInput(e.target.value.slice(0, MAX_QUESTION_LENGTH))}
                                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleQuery(); } }}
                                     placeholder="Ask about methodology, findings, comparisons… (Enter to send)"
                                     rows={1} style={{ width: "100%", background: "none", border: "none", color: "#e2e8f0", fontSize: 13, lineHeight: 1.5 }} />
                             </div>
-                            <button
-                                id="send-query-btn"
-                                onClick={handleQuery} disabled={!input.trim() || querying}
+                            <button id="send-query-btn" onClick={handleQuery} disabled={!input.trim() || querying}
                                 style={{ width: 42, height: 42, borderRadius: 10, border: "none", cursor: "pointer", background: !input.trim() || querying ? "rgba(245,158,11,0.2)" : "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s", color: "#000" }}
                                 onMouseDown={e => { if (!querying && input.trim()) e.currentTarget.style.transform = "scale(0.92)"; }}
                                 onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}>
                                 {querying ? <Spinner size={15} /> : <Ic d={Icons.send} size={15} />}
                             </button>
                         </div>
-                        <div style={{ marginTop: 7, fontSize: 9, color: "#1e293b", textAlign: "center", fontFamily: "monospace", letterSpacing: "0.06em" }}>
-                            MULTI-QUERY EXPANSION · MMR · LLM RE-RANKING · CITATION-AWARE GENERATION
+                        <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ fontSize: 9, color: "#1e293b", fontFamily: "monospace", letterSpacing: "0.06em" }}>
+                                MULTI-QUERY EXPANSION · MMR · LLM RE-RANKING · CITATION-AWARE GENERATION
+                            </div>
+                            {/* Character counter — turns red when near limit */}
+                            {input.length > MAX_QUESTION_LENGTH * 0.8 && (
+                                <div style={{ fontSize: 9, fontFamily: "monospace", color: charsLeft < 100 ? "#f87171" : "#475569" }}>
+                                    {charsLeft} left
+                                </div>
+                            )}
                         </div>
                     </div>
                 </main>
