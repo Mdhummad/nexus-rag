@@ -5,7 +5,7 @@ services:
     runtime: docker
     dockerCommand: "chromadb run --host 0.0.0.0 --port 8000 --path /chroma/chroma"
     image:
-      url: docker.io/chromadb/chroma:latest
+      url: docker.io/chromadb/chroma:0.5.20
     disk:
       name: chroma-data
       mountPath: /chroma/chroma
@@ -33,19 +33,17 @@ services:
       - key: PORT
         value: "3001"
       - key: GROQ_API_KEY
-        sync: false          # Set this manually in Render dashboard
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: CHROMA_URL
+        value: "http://nexus-rag-chroma:8000"
+      - key: CHROMA_COLLECTION
+        value: research_papers
       - key: LLM_MODEL
         value: llama-3.1-8b-instant
       - key: EMBEDDING_MODEL
         value: Xenova/all-MiniLM-L6-v2
-      - key: CHROMA_URL
-        fromService:
-          name: nexus-rag-chroma
-          type: web
-          property: host
-          envVarKey: CHROMA_INTERNAL_URL
-      - key: CHROMA_COLLECTION
-        value: research_papers
       - key: CHUNK_SIZE
         value: "1000"
       - key: CHUNK_OVERLAP
@@ -56,5 +54,3 @@ services:
         value: "3"
       - key: MAX_FILE_SIZE_MB
         value: "50"
-      - key: CORS_ORIGIN
-        sync: false          # Set to your Vercel frontend URL, e.g. https://nexus-rag.vercel.app
