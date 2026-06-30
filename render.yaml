@@ -3,18 +3,13 @@ services:
   - type: web
     name: nexus-rag-chroma
     runtime: docker
-    dockerCommand: "chromadb run --host 0.0.0.0 --port 8000 --path /chroma/chroma"
     image:
       url: docker.io/chromadb/chroma:0.5.20
-    disk:
-      name: chroma-data
-      mountPath: /chroma/chroma
-      sizeGB: 1
     envVars:
       - key: ANONYMIZED_TELEMETRY
         value: "false"
-      - key: ALLOW_RESET
-        value: "false"
+      - key: IS_PERSISTENT
+        value: "true"
 
   # ── Node.js Backend ───────────────────────────────────────────────────────
   - type: web
@@ -23,15 +18,9 @@ services:
     rootDir: backend
     buildCommand: npm install
     startCommand: node src/server.js
-    disk:
-      name: papers-data
-      mountPath: /app/data
-      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "3001"
       - key: GROQ_API_KEY
         sync: false
       - key: CORS_ORIGIN
