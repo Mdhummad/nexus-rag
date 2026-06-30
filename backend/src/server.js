@@ -3,9 +3,12 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { initChroma } from "./services/chromaService.js";
+import { getDb } from "./services/database.js";
+import { apiKeyAuth } from "./middleware/auth.js";
 import papersRouter from "./routes/papers.js";
 import queryRouter from "./routes/query.js";
 import healthRouter from "./routes/health.js";
+
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -38,10 +41,10 @@ app.use((req, _res, next) => {
     next();
 });
 
-// ── Routes ────────────────────────────────────────────────────────────────────
-app.use("/api/health", healthRouter);
-app.use("/api/papers", papersRouter);
-app.use("/api/query", queryRouter);
+// ── Routes (auth applied to all) ─────────────────────────────────────────────
+app.use("/api/health", healthRouter);                    // health is public
+app.use("/api/papers", apiKeyAuth, papersRouter);
+app.use("/api/query",  apiKeyAuth, queryRouter);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {
@@ -66,12 +69,17 @@ async function boot() {
         console.log("║  NEXUS RAG — Node.js Backend          ║");
         console.log("╚══════════════════════════════════════╝\n");
 
-        console.log("[1/2] Initializing ChromaDB...");
+        console.log("[1/3] Initializing SQLite...");
+        getDb();
+        console.log("      SQLite ready ✓");
+
+        console.log("[2/3] Initializing ChromaDB...");
         await initChroma();
 
         server = app.listen(PORT, () => {
-            console.log(`\n[2/2] Server running → http://localhost:${PORT}`);
+            console.log(`\n[3/3] Server running → http://localhost:${PORT}`);
             console.log(`      Health check  → http://localhost:${PORT}/api/health`);
+            console.log(`      Auth          → ${process.env.API_KEY ? "enabled (X-API-Key)" : "disabled (dev mode)"}`);
             console.log(`      LLM model     → ${process.env.LLM_MODEL || "llama-3.1-8b-instant"} (Groq)`);
             console.log(`      Embed model   → ${process.env.EMBEDDING_MODEL || "Xenova/all-MiniLM-L6-v2"} (local)\n`);
         });

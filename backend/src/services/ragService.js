@@ -83,7 +83,6 @@ export async function llmRerank(question, chunks, topK) {
             try {
                 const raw = await chain.invoke({
                     question,
-                    // Use full chunk content for accurate reranking (not truncated)
                     passage: chunk.content.slice(0, 1000),
                 });
                 const parsed = JSON.parse(raw.replace(/```(?:json)?|```/g, "").trim());
@@ -114,7 +113,6 @@ export async function retrieveChunks(question, queries, paperIds, topK, useMMR) 
         const results = await collection.query({
             queryEmbeddings: [qEmb],
             nResults: Math.min(topK * 2, 20),
-            // ── FIX: include embeddings so MMR has real vectors to compare ──
             include: ["documents", "metadatas", "distances", "embeddings"],
             ...(where ? { where } : {}),
         });
@@ -122,7 +120,7 @@ export async function retrieveChunks(question, queries, paperIds, topK, useMMR) 
         const docs = results.documents[0];
         const metas = results.metadatas[0];
         const dists = results.distances[0];
-        const embs = results.embeddings?.[0] ?? [];   // real embedding vectors
+        const embs = results.embeddings?.[0] ?? [];
 
         for (let i = 0; i < docs.length; i++) {
             const chunkId = metas[i].chunk_id;
@@ -133,7 +131,7 @@ export async function retrieveChunks(question, queries, paperIds, topK, useMMR) 
                     content: docs[i],
                     metadata: metas[i],
                     distanceScore: 1 - dists[i],
-                    embedding: embs[i] ?? [],  // ← real embedding, MMR now works
+                    embedding: embs[i] ?? [],
                 });
             }
         }
@@ -176,18 +174,22 @@ function computeConfidence(chunks) {
     return Math.min(scores.reduce((a, b) => a + b, 0) / scores.length, 1);
 }
 
-export async function runRAGPipeline({
-    question,
-    paperIds = null,
-    topK = TOP_K,
-    useMMR = true,
-    useQueryExpansion = true,
-    useReranking = true,
-}) {
-    const start = Date.now();
+function formatSources(chunks) {
+    return chunks.map((c) => ({
+        paperId:        c.metadata.paper_id,
+        paperTitle:     c.metadata.paper_title,
+        filename:       c.metadata.filename,
+        page:           c.metadata.page,
+        chunkIndex:     c.metadata.chunk_index,
+        content:        c.content,
+        relevanceScore: parseFloat((c.rerankScore ?? c.distanceScore ?? 0).toFixed(3)),
+    }));
+}
+
+// ── Shared pipeline (expansion + retrieval + reranking) ───────────────────────
+async function runPipeline({ question, paperIds, topK, useMMR, useQueryExpansion, useReranking }) {
     const timings = {};
 
-    // 1. Query Expansion
     let queries = [question];
     let expandedQueries = null;
     if (useQueryExpansion) {
@@ -197,12 +199,10 @@ export async function runRAGPipeline({
         timings.expansion = Date.now() - t;
     }
 
-    // 2. Retrieval
     const t2 = Date.now();
     let chunks = await retrieveChunks(question, queries, paperIds, topK, useMMR);
     timings.retrieval = Date.now() - t2;
 
-    // 3. Re-ranking
     if (useReranking && chunks.length > RERANK_TOP_K) {
         const t3 = Date.now();
         chunks = await llmRerank(question, chunks, RERANK_TOP_K);
@@ -211,7 +211,23 @@ export async function runRAGPipeline({
         chunks = chunks.slice(0, RERANK_TOP_K);
     }
 
-    // 4. Answer generation
+    return { chunks, expandedQueries, timings };
+}
+
+// ── Standard (non-streaming) pipeline ────────────────────────────────────────
+export async function runRAGPipeline({
+    question,
+    paperIds = null,
+    topK = TOP_K,
+    useMMR = true,
+    useQueryExpansion = true,
+    useReranking = true,
+}) {
+    const start = Date.now();
+    const { chunks, expandedQueries, timings } = await runPipeline({
+        question, paperIds, topK, useMMR, useQueryExpansion, useReranking,
+    });
+
     const t4 = Date.now();
     const context = buildContext(chunks);
     const llm = getLLM({ temperature: 0 });
@@ -222,18 +238,52 @@ export async function runRAGPipeline({
     return {
         question,
         answer,
-        sources: chunks.map((c) => ({
-            paperId: c.metadata.paper_id,
-            paperTitle: c.metadata.paper_title,
-            filename: c.metadata.filename,
-            page: c.metadata.page,
-            chunkIndex: c.metadata.chunk_index,
-            content: c.content,
-            relevanceScore: parseFloat((c.rerankScore ?? c.distanceScore ?? 0).toFixed(3)),
-        })),
+        sources:         formatSources(chunks),
         expandedQueries,
-        confidence: parseFloat(computeConfidence(chunks).toFixed(3)),
+        confidence:      parseFloat(computeConfidence(chunks).toFixed(3)),
         processingTimeMs: Date.now() - start,
-        timings,   // per-step breakdown
+        timings,
     };
+}
+
+// ── Streaming pipeline ────────────────────────────────────────────────────────
+// Emits SSE events via the `emit` callback:
+//   emit("meta",  { expandedQueries, sources, confidence, timings })
+//   emit("token", { content: "..." })   ← streamed LLM tokens
+//   emit("done",  { processingTimeMs })
+export async function runRAGPipelineStream({
+    question,
+    paperIds = null,
+    topK = TOP_K,
+    useMMR = true,
+    useQueryExpansion = true,
+    useReranking = true,
+    emit,
+}) {
+    const start = Date.now();
+    const { chunks, expandedQueries, timings } = await runPipeline({
+        question, paperIds, topK, useMMR, useQueryExpansion, useReranking,
+    });
+
+    // Send meta immediately so the client can render sources while tokens arrive
+    emit("meta", {
+        expandedQueries,
+        sources:    formatSources(chunks),
+        confidence: parseFloat(computeConfidence(chunks).toFixed(3)),
+        timings,
+    });
+
+    // Stream the answer token-by-token
+    const t4 = Date.now();
+    const context = buildContext(chunks);
+    const llm = getLLM({ temperature: 0 });
+    const chain = ANSWER_PROMPT.pipe(llm).pipe(new StringOutputParser());
+
+    const stream = await chain.stream({ context, question });
+    for await (const token of stream) {
+        emit("token", { content: token });
+    }
+    timings.generation = Date.now() - t4;
+
+    emit("done", { processingTimeMs: Date.now() - start, timings });
 }

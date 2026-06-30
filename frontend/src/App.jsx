@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback, useId } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { usePapers } from "./hooks/usePapers.js";
-import { api } from "./utils/api.js";
+import { api, queryStream } from "./utils/api.js";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 
@@ -227,6 +227,7 @@ const SANITIZE_SCHEMA = {
 
 function Message({ msg }) {
     const isUser = msg.role === "user";
+    const isStreaming = msg.streaming === true;
     return (
         <div style={{ marginBottom: 28, animation: "fadeUp 0.3s ease" }}>
             <div style={{ fontSize: 10, color: "#475569", fontFamily: "monospace", marginBottom: 5, display: "flex", alignItems: "center", gap: 5, justifyContent: isUser ? "flex-end" : "flex-start" }}>
@@ -236,10 +237,13 @@ function Message({ msg }) {
                 <div style={{ maxWidth: "80%", background: isUser ? "#f59e0b" : "rgba(255,255,255,0.04)", border: isUser ? "none" : "1px solid rgba(255,255,255,0.08)", borderRadius: isUser ? "16px 16px 4px 16px" : "4px 16px 16px 16px", padding: "12px 16px", fontSize: 13, lineHeight: 1.8, color: isUser ? "#000" : "#cbd5e1", fontWeight: isUser ? 600 : 400 }}>
                     {isUser ? msg.content : (
                         <div className="prose" style={{ fontSize: 13, lineHeight: 1.8 }}>
-                            {/* rehypeSanitize prevents XSS from LLM-generated HTML */}
                             <ReactMarkdown rehypePlugins={[[rehypeSanitize, SANITIZE_SCHEMA]]}>
-                                {msg.content}
+                                {msg.content || (isStreaming ? "​" : "")}
                             </ReactMarkdown>
+                            {/* Blinking cursor while tokens are arriving */}
+                            {isStreaming && (
+                                <span style={{ display: "inline-block", width: 2, height: "1em", background: "#f59e0b", marginLeft: 2, verticalAlign: "text-bottom", animation: "pulse 0.8s infinite" }} />
+                            )}
                         </div>
                     )}
                 </div>
@@ -248,18 +252,21 @@ function Message({ msg }) {
                 <div style={{ maxWidth: "80%", marginTop: 12 }}>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
                         {[
-                            `⏱ ${msg.data.processingTimeMs}ms`,
+                            msg.data.processingTimeMs && `⏱ ${msg.data.processingTimeMs}ms`,
                             `📎 ${msg.data.sources?.length} sources`,
                             msg.data.expandedQueries?.length && `🔀 ${msg.data.expandedQueries.length} expansions`,
                             msg.data.timings?.retrieval && `🔍 ${msg.data.timings.retrieval}ms retrieval`,
                         ].filter(Boolean).map(l => (
                             <span key={l} style={{ fontSize: 10, color: "#475569", fontFamily: "monospace", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 5, padding: "3px 8px" }}>{l}</span>
                         ))}
+                        {isStreaming && <span style={{ fontSize: 10, color: "#f59e0b", fontFamily: "monospace", animation: "pulse 1.2s infinite" }}>● generating…</span>}
                     </div>
-                    <div style={{ marginBottom: 10 }}>
-                        <div style={{ fontSize: 9, color: "#475569", fontFamily: "monospace", marginBottom: 4, letterSpacing: "0.08em" }}>CONFIDENCE</div>
-                        <ConfBar value={msg.data.confidence} />
-                    </div>
+                    {msg.data.confidence !== undefined && (
+                        <div style={{ marginBottom: 10 }}>
+                            <div style={{ fontSize: 9, color: "#475569", fontFamily: "monospace", marginBottom: 4, letterSpacing: "0.08em" }}>CONFIDENCE</div>
+                            <ConfBar value={msg.data.confidence} />
+                        </div>
+                    )}
                     {msg.data.expandedQueries?.length > 0 && (
                         <div style={{ marginBottom: 10 }}>
                             <div style={{ fontSize: 9, color: "#475569", fontFamily: "monospace", marginBottom: 5, letterSpacing: "0.08em" }}>EXPANDED QUERIES</div>
@@ -342,21 +349,68 @@ export default function App() {
         abortRef.current = new AbortController();
 
         setInput("");
-        setMessages(prev => [...prev, { id: newId(), role: "user", content: q }]);
+        const userMsgId = newId();
+        const asstMsgId = newId();
+        setMessages(prev => [...prev, { id: userMsgId, role: "user", content: q }]);
         setQuerying(true);
+
+        // Add placeholder assistant message immediately (will fill token-by-token)
+        setMessages(prev => [...prev, { id: asstMsgId, role: "assistant", content: "", streaming: true }]);
+
+        const body = {
+            question: q,
+            paperIds: selected.size > 0 ? [...selected] : null,
+            topK: cfg.topK,
+            useMMR: cfg.useMMR,
+            useQueryExpansion: cfg.useQueryExpansion,
+            useReranking: cfg.useReranking,
+        };
+
         try {
-            const data = await api.query({
-                question: q,
-                paperIds: selected.size > 0 ? [...selected] : null,
-                topK: cfg.topK,
-                useMMR: cfg.useMMR,
-                useQueryExpansion: cfg.useQueryExpansion,
-                useReranking: cfg.useReranking,
+            await queryStream(body, {
+                // Each token appended to the streaming message
+                onToken: (token) => {
+                    setMessages(prev => prev.map(m =>
+                        m.id === asstMsgId
+                            ? { ...m, content: m.content + token }
+                            : m
+                    ));
+                },
+                // Meta arrives as soon as retrieval+reranking completes
+                onMeta: (meta) => {
+                    setMessages(prev => prev.map(m =>
+                        m.id === asstMsgId
+                            ? { ...m, data: { sources: meta.sources, confidence: meta.confidence, expandedQueries: meta.expandedQueries, timings: meta.timings } }
+                            : m
+                    ));
+                },
+                // Stream complete — remove streaming flag
+                onDone: (done) => {
+                    setMessages(prev => prev.map(m =>
+                        m.id === asstMsgId
+                            ? { ...m, streaming: false, data: { ...m.data, processingTimeMs: done.processingTimeMs, timings: done.timings } }
+                            : m
+                    ));
+                },
+                onError: (msg) => {
+                    setMessages(prev => prev.map(m =>
+                        m.id === asstMsgId
+                            ? { ...m, content: `**Error:** ${msg}`, streaming: false }
+                            : m
+                    ));
+                },
             }, abortRef.current.signal);
-            setMessages(prev => [...prev, { id: newId(), role: "assistant", content: data.answer, data }]);
         } catch (e) {
-            if (e.name === "AbortError") return;   // request was intentionally cancelled
-            setMessages(prev => [...prev, { id: newId(), role: "assistant", content: `**Error:** ${e.message}` }]);
+            if (e.name === "AbortError") {
+                // Remove empty streaming message on cancel
+                setMessages(prev => prev.filter(m => m.id !== asstMsgId));
+                return;
+            }
+            setMessages(prev => prev.map(m =>
+                m.id === asstMsgId
+                    ? { ...m, content: `**Error:** ${e.message}`, streaming: false }
+                    : m
+            ));
         } finally {
             setQuerying(false);
         }
