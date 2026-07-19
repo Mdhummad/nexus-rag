@@ -16,10 +16,13 @@ function toUUID(str) {
 }
 
 export async function initQdrant() {
-    console.log(`[Qdrant] Connecting to ${QDRANT_URL}...`);
+    // Qdrant Cloud REST API is served on port 6333 — append if missing
+    const baseUrl = /:\d+$/.test(QDRANT_URL) ? QDRANT_URL : `${QDRANT_URL}:6333`;
+    console.log(`[Qdrant] Connecting to ${baseUrl}...`);
     _client = new QdrantClient({
-        url:    QDRANT_URL,
-        apiKey: QDRANT_API_KEY,
+        url:                baseUrl,
+        apiKey:             QDRANT_API_KEY,
+        checkCompatibility: false,   // skip version-mismatch warning
     });
 
     // Verify connection

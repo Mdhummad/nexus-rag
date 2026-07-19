@@ -1,7 +1,7 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
-import { getLLM } from "./llmService.js";
-import { getCollection } from "./chromaService.js";
+import { getLLM, getEmbeddings } from "./llmService.js";
+import { searchVectors } from "./qdrantService.js";
 
 const ANALYSIS_PROMPTS = {
     summary: `You are an expert research analyst.
@@ -36,49 +36,63 @@ Excerpts:
 Future Research Directions:`,
 };
 
+// Representative queries per analysis type to retrieve the most relevant chunks
+const ANALYSIS_QUERIES = {
+    summary:       "overview summary introduction abstract conclusion findings",
+    methodology:   "methodology experimental design datasets metrics evaluation baseline",
+    contributions: "contributions novelty proposed approach key results improvements",
+    limitations:   "limitations drawbacks weaknesses future work discussion",
+    future_work:   "future work open problems directions limitations discussion",
+};
+
 export async function analyzePaper(paperId, analysisType) {
     if (!ANALYSIS_PROMPTS[analysisType]) {
         throw new Error(`Unknown analysis type: ${analysisType}`);
     }
 
-    const collection = getCollection();
-    const results = await collection.get({
-        where: { paper_id: paperId },
-        include: ["documents", "metadatas"],
+    // Use a representative query to pull the most relevant chunks for this analysis type
+    const embedder    = getEmbeddings();
+    const queryText   = ANALYSIS_QUERIES[analysisType];
+    const queryVector = await embedder.embedQuery(queryText);
+
+    // Retrieve up to 20 chunks from this specific paper
+    const results = await searchVectors(queryVector, {
+        nResults: 20,
+        paperIds: [paperId],
     });
 
-    if (!results.ids.length) {
+    if (!results.length) {
         throw new Error(`No content found for paper: ${paperId}`);
     }
 
-    const combined = results.ids.map((_, i) => ({
-        doc: results.documents[i],
-        meta: results.metadatas[i],
-    })).sort((a, b) =>
-        (a.meta.page - b.meta.page) || (a.meta.chunk_index - b.meta.chunk_index)
+    // Sort by page then chunk index for coherent reading order
+    const sorted = [...results].sort((a, b) =>
+        (a.metadata.page - b.metadata.page) ||
+        (a.metadata.chunk_index - b.metadata.chunk_index)
     );
 
-    const total = combined.length;
+    // Sample beginning, middle, end for broad coverage
+    const total   = sorted.length;
     const indices = new Set([
-        ...Array.from({ length: Math.ceil(total * 0.2) }, (_, i) => i),
-        ...Array.from({ length: Math.ceil(total * 0.2) }, (_, i) => Math.floor(total * 0.4) + i),
-        ...Array.from({ length: Math.ceil(total * 0.2) }, (_, i) => total - Math.ceil(total * 0.2) + i),
+        ...Array.from({ length: Math.ceil(total * 0.35) }, (_, i) => i),
+        ...Array.from({ length: Math.ceil(total * 0.3)  }, (_, i) => Math.floor(total * 0.35) + i),
+        ...Array.from({ length: Math.ceil(total * 0.35) }, (_, i) => total - Math.ceil(total * 0.35) + i),
     ]);
 
     const selected = [...indices]
-        .filter((i) => i < total)
+        .filter(i => i < total)
         .sort((a, b) => a - b)
-        .map((i) => combined[i]);
+        .map(i => sorted[i]);
 
     const context = selected
-        .map(({ doc, meta }) => `[Page ${meta.page}]\n${doc}`)
+        .map(({ content, metadata }) => `[Page ${metadata.page}]\n${content}`)
         .join("\n\n---\n\n")
         .slice(0, 5000);
 
-    const start = Date.now();
-    const llm = getLLM({ temperature: 0.2, maxTokens: 1500 });
-    const prompt = ChatPromptTemplate.fromTemplate(ANALYSIS_PROMPTS[analysisType]);
-    const chain = prompt.pipe(llm).pipe(new StringOutputParser());
+    const start   = Date.now();
+    const llm     = getLLM({ temperature: 0.2, maxTokens: 1500 });
+    const prompt  = ChatPromptTemplate.fromTemplate(ANALYSIS_PROMPTS[analysisType]);
+    const chain   = prompt.pipe(llm).pipe(new StringOutputParser());
     const content = await chain.invoke({ context });
 
     return {
