@@ -4,7 +4,7 @@ import { z } from "zod";
 import { upload } from "../middleware/upload.js";
 import { ingestPaper } from "../services/ingestionService.js";
 import { analyzePaper } from "../services/analysisService.js";
-import { deleteByPaperId } from "../services/chromaService.js";
+import { deleteByPaperId } from "../services/qdrantService.js";
 import { insertPaper, getAllPapers, getPaperById, deletePaperById } from "../services/database.js";
 
 const router = Router();
@@ -12,14 +12,14 @@ const router = Router();
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 const uploadLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 10,
-    message: { error: "Too many uploads — please wait a moment." },
+    max:      10,
+    message:  { error: "Too many uploads — please wait a moment." },
 });
 
 const analysisLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 20,
-    message: { error: "Too many analysis requests — please wait a moment." },
+    max:      20,
+    message:  { error: "Too many analysis requests — please wait a moment." },
 });
 
 // ── Zod schema ────────────────────────────────────────────────────────────────
@@ -58,9 +58,9 @@ router.delete("/:id", async (req, res, next) => {
     try {
         const paper = getPaperById(req.params.id);
         if (!paper) return res.status(404).json({ error: "Paper not found" });
-        const deleted = await deleteByPaperId(req.params.id);
+        await deleteByPaperId(req.params.id);
         deletePaperById(req.params.id);   // atomic SQLite delete
-        res.json({ message: `Deleted paper and ${deleted} chunks` });
+        res.json({ message: `Deleted paper and its vector chunks` });
     } catch (err) {
         next(err);
     }
@@ -74,7 +74,7 @@ router.post("/:id/analyze", analysisLimiter, async (req, res, next) => {
         const parsed = AnalyzeSchema.safeParse(req.body);
         if (!parsed.success) {
             return res.status(400).json({
-                error: "Invalid request",
+                error:   "Invalid request",
                 details: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
             });
         }

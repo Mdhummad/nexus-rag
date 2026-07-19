@@ -4,9 +4,9 @@ import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { getLLM, getEmbeddings } from "./llmService.js";
-import { getCollection } from "./chromaService.js";
+import { upsertChunks } from "./qdrantService.js";
 
-const CHUNK_SIZE = parseInt(process.env.CHUNK_SIZE) || 1000;
+const CHUNK_SIZE    = parseInt(process.env.CHUNK_SIZE)    || 1000;
 const CHUNK_OVERLAP = parseInt(process.env.CHUNK_OVERLAP) || 200;
 
 const METADATA_PROMPT = ChatPromptTemplate.fromTemplate(`
@@ -24,9 +24,9 @@ JSON only, no explanation, no markdown:`);
 
 async function extractMetadata(text) {
     try {
-        const llm = getLLM({ temperature: 0 });
+        const llm   = getLLM({ temperature: 0 });
         const chain = METADATA_PROMPT.pipe(llm).pipe(new StringOutputParser());
-        const raw = await chain.invoke({ text: text.slice(0, 2000) });
+        const raw     = await chain.invoke({ text: text.slice(0, 2000) });
         const cleaned = raw.replace(/```(?:json)?|```/g, "").trim();
         return JSON.parse(cleaned);
     } catch {
@@ -64,9 +64,9 @@ async function extractPages(buffer) {
 
 async function chunkText(pages, paperId, paperTitle, filename) {
     const splitter = new RecursiveCharacterTextSplitter({
-        chunkSize: CHUNK_SIZE,
+        chunkSize:    CHUNK_SIZE,
         chunkOverlap: CHUNK_OVERLAP,
-        separators: ["\n\n", "\n", ". ", " ", ""],
+        separators:   ["\n\n", "\n", ". ", " ", ""],
     });
 
     const chunks = [];
@@ -79,14 +79,14 @@ async function chunkText(pages, paperId, paperTitle, filename) {
             if (content.trim().length < 50) continue;
             const chunkId = `${paperId}_chunk_${chunkIndex}`;
             chunks.push({
-                id: chunkId,
-                content: content.trim(),
+                id:       chunkId,
+                content:  content.trim(),
                 metadata: {
-                    chunk_id: chunkId,
-                    paper_id: paperId,
+                    chunk_id:    chunkId,
+                    paper_id:    paperId,
                     paper_title: paperTitle,
                     filename,
-                    page: pageNum,           // ← real page number now
+                    page:        pageNum,
                     chunk_index: chunkIndex,
                 },
             });
@@ -100,9 +100,8 @@ async function embedAndStore(chunks) {
     if (!chunks.length) return 0;
 
     const embedder = getEmbeddings();
-    const collection = getCollection();
-    const BATCH = 100;
-    let stored = 0;
+    const BATCH    = 100;
+    let stored     = 0;
 
     for (let i = 0; i < chunks.length; i += BATCH) {
         const batch = chunks.slice(i, i + BATCH);
@@ -111,12 +110,14 @@ async function embedAndStore(chunks) {
         // Embed entire batch at once (not one-by-one)
         const embeddings = await embedder.embedDocuments(texts);
 
-        await collection.upsert({
-            ids: batch.map((c) => c.id),
-            documents: texts,
-            embeddings,
-            metadatas: batch.map((c) => c.metadata),
-        });
+        const items = batch.map((c, idx) => ({
+            id:        c.id,
+            embedding: embeddings[idx],
+            document:  c.content,
+            metadata:  c.metadata,
+        }));
+
+        await upsertChunks(items);
         stored += batch.length;
         process.stdout.write(`\r      Embedded ${stored}/${chunks.length} chunks...`);
     }
@@ -131,27 +132,27 @@ export async function ingestPaper(fileBuffer, filename) {
     const { pages, totalPages, fullText } = await extractPages(fileBuffer);
 
     console.log("  Extracting metadata...");
-    const meta = await extractMetadata(fullText);
+    const meta       = await extractMetadata(fullText);
     const paperTitle = meta.title || filename.replace(/\.pdf$/i, "");
 
     console.log("  Chunking text...");
     const chunks = await chunkText(pages, paperId, paperTitle, filename);
     console.log(`  Created ${chunks.length} chunks across ${totalPages} pages`);
 
-    console.log("  Embedding chunks...");
+    console.log("  Embedding & storing in Qdrant...");
     const totalChunks = await embedAndStore(chunks);
-    console.log(`  Stored ${totalChunks} chunks in ChromaDB ✓`);
+    console.log(`  Stored ${totalChunks} chunks in Qdrant ✓`);
 
     return {
-        id: paperId,
+        id:          paperId,
         filename,
-        title: paperTitle,
-        authors: meta.authors || null,
-        abstract: meta.abstract || null,
-        year: meta.year || null,
+        title:       paperTitle,
+        authors:     meta.authors  || null,
+        abstract:    meta.abstract || null,
+        year:        meta.year     || null,
         totalPages,
         totalChunks,
-        status: "ready",
-        uploadedAt: new Date().toISOString(),
+        status:      "ready",
+        uploadedAt:  new Date().toISOString(),
     };
 }

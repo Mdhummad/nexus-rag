@@ -2,7 +2,6 @@ const BASE = import.meta.env.VITE_API_URL
     ? `${import.meta.env.VITE_API_URL}/api`
     : "/api";
 
-// Optional API key — set VITE_API_KEY in .env for production
 const API_KEY = import.meta.env.VITE_API_KEY || null;
 
 function authHeaders(extra = {}) {
@@ -27,6 +26,15 @@ async function req(method, path, body, signal) {
     return res.json();
 }
 
+export const api = {
+    health:      ()          => req("GET",    "/health"),
+    getPapers:   ()          => req("GET",    "/papers"),
+    uploadPaper: (form, sig) => req("POST",   "/papers/upload",       form,       sig),
+    deletePaper: (id)        => req("DELETE", `/papers/${id}`),
+    analyzePaper:(id, type)  => req("POST",   `/papers/${id}/analyze`, { analysisType: type }),
+    query:       (body)      => req("POST",   "/query",                body),
+};
+
 /**
  * Streaming query via SSE.
  * Calls onToken(str) for each streamed token,
@@ -35,52 +43,49 @@ async function req(method, path, body, signal) {
  * onError(message) on failure.
  * Returns an AbortController so the caller can cancel.
  */
-export async function queryStream(body, { onToken, onMeta, onDone, onError }, signal) {
-    const res = await fetch(`${BASE}/query/stream`, {
-        method: "POST",
-        signal,
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(body),
-    });
+export async function queryStream(body, { onToken, onMeta, onDone, onError }) {
+    const controller = new AbortController();
 
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(err.error || "Stream request failed");
-    }
+    try {
+        const res = await fetch(`${BASE}/query/stream`, {
+            method:  "POST",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body:    JSON.stringify(body),
+            signal:  controller.signal,
+        });
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: res.statusText }));
+            onError(err.error || "Stream request failed");
+            return controller;
+        }
 
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        const reader  = res.body.getReader();
+        const decoder = new TextDecoder();
+        let   buffer  = "";
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop();  // keep incomplete line in buffer
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
 
-        for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-                const event = JSON.parse(line.slice(6));
-                if (event.type === "token") onToken?.(event.content);
-                else if (event.type === "meta")  onMeta?.(event);
-                else if (event.type === "done")  onDone?.(event);
-                else if (event.type === "error") onError?.(event.message);
-            } catch {
-                // malformed line — skip
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+
+            for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                try {
+                    const evt = JSON.parse(line.slice(6));
+                    if (evt.type === "token") onToken(evt.content);
+                    if (evt.type === "meta")  onMeta(evt);
+                    if (evt.type === "done")  onDone(evt);
+                    if (evt.type === "error") onError(evt.message);
+                } catch { /* skip malformed */ }
             }
         }
+    } catch (err) {
+        if (err.name !== "AbortError") onError(err.message);
     }
-}
 
-export const api = {
-    health:       ()             => req("GET",    "/health"),
-    getPapers:    ()             => req("GET",    "/papers"),
-    uploadPaper:  (file)         => { const fd = new FormData(); fd.append("file", file); return req("POST", "/papers/upload", fd); },
-    deletePaper:  (id)           => req("DELETE", `/papers/${id}`),
-    analyzePaper: (id, type)     => req("POST",   `/papers/${id}/analyze`, { analysisType: type }),
-    query:        (body, signal) => req("POST",   "/query", body, signal),
-    queryStream,
-};
+    return controller;
+}

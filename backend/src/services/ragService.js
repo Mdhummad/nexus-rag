@@ -1,9 +1,9 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { getLLM, getEmbeddings } from "./llmService.js";
-import { getCollection } from "./chromaService.js";
+import { searchVectors } from "./qdrantService.js";
 
-const TOP_K = parseInt(process.env.TOP_K) || 5;
+const TOP_K        = parseInt(process.env.TOP_K)        || 5;
 const RERANK_TOP_K = parseInt(process.env.RERANK_TOP_K) || 3;
 
 const EXPANSION_PROMPT = ChatPromptTemplate.fromTemplate(`
@@ -17,9 +17,9 @@ No explanation, no markdown:`);
 
 export async function expandQuery(question) {
     try {
-        const llm = getLLM({ temperature: 0.3 });
+        const llm   = getLLM({ temperature: 0.3 });
         const chain = EXPANSION_PROMPT.pipe(llm).pipe(new StringOutputParser());
-        const raw = await chain.invoke({ question });
+        const raw     = await chain.invoke({ question });
         const cleaned = raw.replace(/```(?:json)?|```/g, "").trim();
         const expansions = JSON.parse(cleaned);
         if (!Array.isArray(expansions)) return [question];
@@ -33,7 +33,7 @@ function cosineSim(a, b) {
     if (!a?.length || !b?.length || a.length !== b.length) return 0;
     let dot = 0, normA = 0, normB = 0;
     for (let i = 0; i < a.length; i++) {
-        dot += a[i] * b[i];
+        dot   += a[i] * b[i];
         normA += a[i] * a[i];
         normB += b[i] * b[i];
     }
@@ -43,15 +43,15 @@ function cosineSim(a, b) {
 
 export function mmrRerank(queryEmbedding, candidates, topK, lambda = 0.5) {
     if (!candidates.length) return [];
-    const selected = [];
+    const selected  = [];
     const remaining = [...candidates];
 
     while (selected.length < topK && remaining.length > 0) {
         let bestScore = -Infinity;
-        let bestIdx = 0;
+        let bestIdx   = 0;
 
         for (let i = 0; i < remaining.length; i++) {
-            const relevance = cosineSim(queryEmbedding, remaining[i].embedding);
+            const relevance  = cosineSim(queryEmbedding, remaining[i].embedding);
             const redundancy = selected.length === 0
                 ? 0
                 : Math.max(...selected.map((s) => cosineSim(remaining[i].embedding, s.embedding)));
@@ -75,18 +75,18 @@ Return ONLY JSON: {{"score": <float>}}
 No explanation:`);
 
 export async function llmRerank(question, chunks, topK) {
-    const llm = getLLM({ temperature: 0 });
+    const llm   = getLLM({ temperature: 0 });
     const chain = RERANK_PROMPT.pipe(llm).pipe(new StringOutputParser());
 
     const scored = await Promise.all(
         chunks.map(async (chunk) => {
             try {
-                const raw = await chain.invoke({
+                const raw    = await chain.invoke({
                     question,
                     passage: chunk.content.slice(0, 1000),
                 });
                 const parsed = JSON.parse(raw.replace(/```(?:json)?|```/g, "").trim());
-                const score = parseFloat(parsed?.score);
+                const score  = parseFloat(parsed?.score);
                 return { ...chunk, rerankScore: isNaN(score) ? 0.5 : Math.min(Math.max(score, 0), 1) };
             } catch {
                 return { ...chunk, rerankScore: chunk.distanceScore ?? 0.5 };
@@ -98,41 +98,21 @@ export async function llmRerank(question, chunks, topK) {
 }
 
 export async function retrieveChunks(question, queries, paperIds, topK, useMMR) {
-    const collection = getCollection();
     const embedder = getEmbeddings();
-
-    const where = paperIds?.length
-        ? { paper_id: { $in: paperIds } }
-        : undefined;
-
-    const seen = new Set();
+    const seen     = new Set();
     const allChunks = [];
 
     for (const q of queries) {
-        const qEmb = await embedder.embedQuery(q);
-        const results = await collection.query({
-            queryEmbeddings: [qEmb],
+        const qEmb    = await embedder.embedQuery(q);
+        const results = await searchVectors(qEmb, {
             nResults: Math.min(topK * 2, 20),
-            include: ["documents", "metadatas", "distances", "embeddings"],
-            ...(where ? { where } : {}),
+            paperIds: paperIds?.length ? paperIds : null,
         });
 
-        const docs = results.documents[0];
-        const metas = results.metadatas[0];
-        const dists = results.distances[0];
-        const embs = results.embeddings?.[0] ?? [];
-
-        for (let i = 0; i < docs.length; i++) {
-            const chunkId = metas[i].chunk_id;
-            if (!seen.has(chunkId)) {
-                seen.add(chunkId);
-                allChunks.push({
-                    chunkId,
-                    content: docs[i],
-                    metadata: metas[i],
-                    distanceScore: 1 - dists[i],
-                    embedding: embs[i] ?? [],
-                });
+        for (const hit of results) {
+            if (!seen.has(hit.chunkId)) {
+                seen.add(hit.chunkId);
+                allChunks.push(hit);
             }
         }
     }
@@ -190,22 +170,22 @@ function formatSources(chunks) {
 async function runPipeline({ question, paperIds, topK, useMMR, useQueryExpansion, useReranking }) {
     const timings = {};
 
-    let queries = [question];
+    let queries        = [question];
     let expandedQueries = null;
     if (useQueryExpansion) {
-        const t = Date.now();
-        queries = await expandQuery(question);
+        const t        = Date.now();
+        queries        = await expandQuery(question);
         expandedQueries = queries.slice(1);
         timings.expansion = Date.now() - t;
     }
 
-    const t2 = Date.now();
+    const t2   = Date.now();
     let chunks = await retrieveChunks(question, queries, paperIds, topK, useMMR);
     timings.retrieval = Date.now() - t2;
 
     if (useReranking && chunks.length > RERANK_TOP_K) {
         const t3 = Date.now();
-        chunks = await llmRerank(question, chunks, RERANK_TOP_K);
+        chunks   = await llmRerank(question, chunks, RERANK_TOP_K);
         timings.reranking = Date.now() - t3;
     } else {
         chunks = chunks.slice(0, RERANK_TOP_K);
@@ -217,30 +197,30 @@ async function runPipeline({ question, paperIds, topK, useMMR, useQueryExpansion
 // ── Standard (non-streaming) pipeline ────────────────────────────────────────
 export async function runRAGPipeline({
     question,
-    paperIds = null,
-    topK = TOP_K,
-    useMMR = true,
-    useQueryExpansion = true,
-    useReranking = true,
+    paperIds           = null,
+    topK               = TOP_K,
+    useMMR             = true,
+    useQueryExpansion  = true,
+    useReranking       = true,
 }) {
     const start = Date.now();
     const { chunks, expandedQueries, timings } = await runPipeline({
         question, paperIds, topK, useMMR, useQueryExpansion, useReranking,
     });
 
-    const t4 = Date.now();
+    const t4      = Date.now();
     const context = buildContext(chunks);
-    const llm = getLLM({ temperature: 0 });
-    const chain = ANSWER_PROMPT.pipe(llm).pipe(new StringOutputParser());
-    const answer = await chain.invoke({ context, question });
+    const llm     = getLLM({ temperature: 0 });
+    const chain   = ANSWER_PROMPT.pipe(llm).pipe(new StringOutputParser());
+    const answer  = await chain.invoke({ context, question });
     timings.generation = Date.now() - t4;
 
     return {
         question,
         answer,
-        sources:         formatSources(chunks),
+        sources:          formatSources(chunks),
         expandedQueries,
-        confidence:      parseFloat(computeConfidence(chunks).toFixed(3)),
+        confidence:       parseFloat(computeConfidence(chunks).toFixed(3)),
         processingTimeMs: Date.now() - start,
         timings,
     };
@@ -253,11 +233,11 @@ export async function runRAGPipeline({
 //   emit("done",  { processingTimeMs })
 export async function runRAGPipelineStream({
     question,
-    paperIds = null,
-    topK = TOP_K,
-    useMMR = true,
+    paperIds          = null,
+    topK              = TOP_K,
+    useMMR            = true,
     useQueryExpansion = true,
-    useReranking = true,
+    useReranking      = true,
     emit,
 }) {
     const start = Date.now();
@@ -274,10 +254,10 @@ export async function runRAGPipelineStream({
     });
 
     // Stream the answer token-by-token
-    const t4 = Date.now();
+    const t4      = Date.now();
     const context = buildContext(chunks);
-    const llm = getLLM({ temperature: 0 });
-    const chain = ANSWER_PROMPT.pipe(llm).pipe(new StringOutputParser());
+    const llm     = getLLM({ temperature: 0 });
+    const chain   = ANSWER_PROMPT.pipe(llm).pipe(new StringOutputParser());
 
     const stream = await chain.stream({ context, question });
     for await (const token of stream) {

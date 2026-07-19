@@ -2,15 +2,15 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import { initChroma } from "./services/chromaService.js";
+import { initQdrant } from "./services/qdrantService.js";
 import { getDb } from "./services/database.js";
 import { apiKeyAuth } from "./middleware/auth.js";
 import papersRouter from "./routes/papers.js";
-import queryRouter from "./routes/query.js";
+import queryRouter  from "./routes/query.js";
 import healthRouter from "./routes/health.js";
 
 
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 3001;
 
 // ── Security headers ──────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ app.use(cors({
 }));
 
 // ── Body parsing — conservative limits ───────────────────────────────────────
-app.use(express.json({ limit: "1mb" }));          // JSON body: 1 MB max
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 // ── Request logger ────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ app.use((req, _res, next) => {
     next();
 });
 
-// ── Routes (auth applied to all) ─────────────────────────────────────────────
+// ── Routes (auth applied to all except health) ────────────────────────────────
 app.use("/api/health", healthRouter);                    // health is public
 app.use("/api/papers", apiKeyAuth, papersRouter);
 app.use("/api/query",  apiKeyAuth, queryRouter);
@@ -73,8 +73,9 @@ async function boot() {
         getDb();
         console.log("      SQLite ready ✓");
 
-        console.log("[2/3] Initializing ChromaDB...");
-        await initChroma();
+        console.log("[2/3] Initializing Qdrant...");
+        await initQdrant();
+        console.log("      Qdrant ready ✓");
 
         server = app.listen(PORT, () => {
             console.log(`\n[3/3] Server running → http://localhost:${PORT}`);
@@ -100,6 +101,6 @@ function shutdown(signal) {
 }
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGINT",  () => shutdown("SIGINT"));
 
 boot();

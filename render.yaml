@@ -1,17 +1,5 @@
 services:
-  # ── ChromaDB Vector Database ──────────────────────────────────────────────
-  - type: web
-    name: nexus-rag-chroma
-    runtime: docker
-    image:
-      url: docker.io/chromadb/chroma:0.5.20
-    envVars:
-      - key: ANONYMIZED_TELEMETRY
-        value: "false"
-      - key: IS_PERSISTENT
-        value: "true"
-
-  # ── Node.js Backend ───────────────────────────────────────────────────────
+  # ── Node.js Backend (Qdrant Cloud for vectors — no Docker needed!) ────────────
   - type: web
     name: nexus-rag-api
     runtime: node
@@ -22,12 +10,14 @@ services:
       - key: NODE_ENV
         value: production
       - key: GROQ_API_KEY
-        sync: false
+        sync: false       # Set this in Render dashboard
       - key: CORS_ORIGIN
-        sync: false
-      - key: CHROMA_URL
-        value: "http://nexus-rag-chroma:8000"
-      - key: CHROMA_COLLECTION
+        sync: false       # Set to your Vercel URL e.g. https://nexus-rag-alpha.vercel.app
+      - key: QDRANT_URL
+        sync: false       # Set to your Qdrant Cloud URL e.g. https://xxx.aws.cloud.qdrant.io
+      - key: QDRANT_API_KEY
+        sync: false       # Set to your Qdrant Cloud API key
+      - key: QDRANT_COLLECTION
         value: research_papers
       - key: LLM_MODEL
         value: llama-3.1-8b-instant

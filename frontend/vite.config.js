@@ -6,6 +6,8 @@ export default defineConfig({
     server: {
         port: 5173,
         proxy: {
+            // In dev, proxy /api calls to local backend (port 3001)
+            // In production (Vercel), VITE_API_URL env var is used instead
             "/api": {
                 target: "http://localhost:3001",
                 changeOrigin: true,
