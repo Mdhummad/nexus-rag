@@ -405,6 +405,79 @@ function EmptyState({ paperCount }) {
 /* ════════════════════════════════════════════════════════════════════════════ */
 /*  MAIN APP                                                                   */
 /* ════════════════════════════════════════════════════════════════════════════ */
+/* ── Pipeline Config Panel ─────────────────────────────────────────────────── */
+function PipelineConfig({ config, onChange }) {
+  const [open, setOpen] = useState(false);
+  const toggle = (key) => onChange({ ...config, [key]: !config[key] });
+  const set    = (key, val) => onChange({ ...config, [key]: val });
+  const row = (label, desc, key) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>{label}</div>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{desc}</div>
+      </div>
+      <button onClick={() => toggle(key)} style={{
+        width: 38, height: 20, borderRadius: 10, border: "none", cursor: "pointer",
+        background: config[key] ? "linear-gradient(90deg,#7c3aed,#4f46e5)" : "rgba(255,255,255,0.12)",
+        position: "relative", transition: "background .25s", flexShrink: 0,
+      }}>
+        <div style={{
+          width: 14, height: 14, borderRadius: "50%", background: "#fff",
+          position: "absolute", top: 3, left: config[key] ? 21 : 3,
+          transition: "left .25s", boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
+        }} />
+      </button>
+    </div>
+  );
+  const slider = (label, desc, key, min, max, step) => (
+    <div style={{ padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>{label}</div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{desc}</div>
+        </div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#a78bfa", minWidth: 30, textAlign: "right" }}>{config[key]}</div>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={config[key]}
+        onChange={e => set(key, Number(e.target.value))}
+        style={{ width: "100%", accentColor: "#7c3aed", cursor: "pointer" }} />
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "rgba(255,255,255,0.2)", marginTop: 2 }}>
+        <span>{min}</span><span>{max}</span>
+      </div>
+    </div>
+  );
+  return (
+    <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: "100%", background: "none", border: "none", cursor: "pointer",
+        padding: "10px 16px", display: "flex", alignItems: "center", gap: 8,
+        color: "rgba(255,255,255,0.5)",
+      }}>
+        <Ic d={Icons.layers} size={14} />
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase", flex: 1, textAlign: "left" }}>Pipeline Config</span>
+        <div style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .2s" }}>
+          <Ic d={Icons.chevron} size={12} />
+        </div>
+      </button>
+      {open && (
+        <div style={{ padding: "0 16px 14px" }}>
+          {row("Query Expansion", "Generate 2 extra query variants", "useQueryExpansion")}
+          {row("MMR Re-ranking", "Diversity filter on retrieved chunks", "useMMR")}
+          {row("LLM Re-ranking", "Score chunks for relevance via LLM", "useReranking")}
+          {slider("Top-K Results", "Chunks retrieved per query", "topK", 3, 15, 1)}
+          {slider("Chunk Size", "Characters per text chunk", "chunkSize", 400, 2000, 100)}
+          {slider("Chunk Overlap", "Overlap between chunks", "chunkOverlap", 0, 400, 50)}
+          <div style={{ marginTop: 10, padding: "8px 10px", background: "rgba(139,92,246,0.08)", borderRadius: 8, border: "1px solid rgba(139,92,246,0.2)" }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", lineHeight: 1.5 }}>
+              ⚠ Chunk settings apply on next upload. Pipeline toggles apply immediately.
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const { toasts, add: toast, remove: removeToast } = useToasts();
   const { papers, loading: papersLoading, reload: reloadPapers } = usePapers();
@@ -416,7 +489,17 @@ export default function App() {
   const [uploading,   setUploading]   = useState(false);
   const [deleting,    setDeleting]    = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [uploadProgress, setUploadProgress] = useState(null); // filename
+  const [uploadProgress, setUploadProgress] = useState(null);
+
+  // Pipeline configuration state
+  const [pipelineCfg, setPipelineCfg] = useState({
+    useQueryExpansion: true,
+    useMMR:            true,
+    useReranking:      true,
+    topK:              5,
+    chunkSize:         1000,
+    chunkOverlap:      200,
+  });
 
   const abortRef      = useRef(null);
   const bottomRef     = useRef(null);
@@ -516,7 +599,7 @@ export default function App() {
     const paperIds = selectedIds.size > 0 ? [...selectedIds] : null;
 
     abortRef.current = await queryStream(
-      { question: q, paperIds, useMMR: true, useQueryExpansion: true, useReranking: true },
+      { question: q, paperIds, useMMR: pipelineCfg.useMMR, useQueryExpansion: pipelineCfg.useQueryExpansion, useReranking: pipelineCfg.useReranking, topK: pipelineCfg.topK },
       {
         onToken: token => {
           clearInterval(stepTimer);
@@ -566,16 +649,17 @@ export default function App() {
         <div style={{ padding: "20px 16px 12px", flexShrink: 0 }}>
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 4px 16px rgba(124,58,237,0.4)",
-            }}>
-              <Ic d={Icons.brain} size={18} />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Nexus RAG"
+              style={{
+                width: 40, height: 40, borderRadius: 10,
+                boxShadow: "0 4px 16px rgba(124,58,237,0.5)",
+                objectFit: "cover",
+              }}
+            />
             <div>
-              <div style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-.02em" }}>NEXUS RAG</div>
+              <div style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-.02em", background: "linear-gradient(90deg,#c4b5fd,#818cf8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>NEXUS RAG</div>
               <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: ".06em" }}>RESEARCH AI</div>
             </div>
           </div>
@@ -658,6 +742,9 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* Pipeline Config */}
+        <PipelineConfig config={pipelineCfg} onChange={setPipelineCfg} />
       </div>
 
       {/* ── Main chat area ─────────────────────────────────────────────────── */}
