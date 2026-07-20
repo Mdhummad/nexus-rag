@@ -709,42 +709,50 @@ export default function App() {
           )}
         </div>
 
-        {/* Paper list */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
-          {papersLoading ? (
-            <div style={{ display: "flex", justifyContent: "center", paddingTop: 20 }}><Spinner /></div>
-          ) : papers.length === 0 ? (
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", textAlign: "center", paddingTop: 12 }}>
-              No papers yet
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {papers.map(p => (
-                <PaperChip
-                  key={p.id} paper={p}
-                  selected={selectedIds.has(p.id)}
-                  onToggle={toggleSelect}
-                  onDelete={handleDelete}
-                  deleting={deleting}
-                />
-              ))}
+        {/* Scrollable bottom — paper list + hint + pipeline config */}
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+
+          {/* Paper list */}
+          <div style={{ padding: "0 16px 16px" }}>
+            {papersLoading ? (
+              <div style={{ display: "flex", justifyContent: "center", paddingTop: 20 }}><Spinner /></div>
+            ) : papers.length === 0 ? (
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", textAlign: "center", paddingTop: 12 }}>
+                No papers yet
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {papers.map(p => (
+                  <PaperChip
+                    key={p.id} paper={p}
+                    selected={selectedIds.has(p.id)}
+                    onToggle={toggleSelect}
+                    onDelete={handleDelete}
+                    deleting={deleting}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Spacer to push hint + config to bottom when few papers */}
+          <div style={{ flex: 1 }} />
+
+          {/* Selected hint */}
+          {papers.length > 0 && (
+            <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textAlign: "center" }}>
+                {selectedIds.size === 0
+                  ? "All papers will be searched"
+                  : `Searching ${selectedIds.size} selected paper${selectedIds.size > 1 ? "s" : ""}`}
+              </div>
             </div>
           )}
+
+          {/* Pipeline Config */}
+          <PipelineConfig config={pipelineCfg} onChange={setPipelineCfg} />
+
         </div>
-
-        {/* Selected hint */}
-        {papers.length > 0 && (
-          <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textAlign: "center" }}>
-              {selectedIds.size === 0
-                ? "All papers will be searched"
-                : `Searching ${selectedIds.size} selected paper${selectedIds.size > 1 ? "s" : ""}`}
-            </div>
-          </div>
-        )}
-
-        {/* Pipeline Config */}
-        <PipelineConfig config={pipelineCfg} onChange={setPipelineCfg} />
       </div>
 
       {/* ── Main chat area ─────────────────────────────────────────────────── */}
