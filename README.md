@@ -64,7 +64,7 @@ Your Question
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Browser  (Vercel)                         │
+│                    Browser  (Vercel)                        │
 │                                                             │
 │   Sidebar                  Chat Area                        │
 │   • Upload PDFs            • Real-time streaming answer     │
@@ -75,7 +75,7 @@ Your Question
 └──────────────────────────────┬──────────────────────────────┘
                                │ HTTPS (Fetch / SSE)
 ┌──────────────────────────────▼──────────────────────────────┐
-│                  Node.js Backend  (Render)                   │
+│                  Node.js Backend  (Render)                  │
 │                                                             │
 │  Express.js · helmet · cors · express-rate-limit · zod      │
 │                                                             │
@@ -87,15 +87,15 @@ Your Question
 │  POST /api/query/stream    → SSE streaming RAG query        │
 │  GET  /api/health          → health check                   │
 │                                                             │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
-│  │  ragService │  │ingestionSvc  │  │  analysisService  │  │
-│  │             │  │              │  │                   │  │
-│  │ • Expansion │  │ • pdf-parse  │  │ • summary         │  │
-│  │ • Retrieval │  │ • LLM meta   │  │ • methodology     │  │
-│  │ • MMR       │  │ • Chunking   │  │ • contributions   │  │
-│  │ • Reranking │  │ • Embedding  │  │ • limitations     │  │
-│  │ • Streaming │  │ • Qdrant     │  │ • future_work     │  │
-│  └─────────────┘  └──────────────┘  └───────────────────┘  │
+│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   │
+│  │  ragService │  │ingestionSvc  │  │  analysisService  │   │
+│  │             │  │              │  │                   │   │
+│  │ • Expansion │  │ • pdf-parse  │  │ • summary         │   │
+│  │ • Retrieval │  │ • LLM meta   │  │ • methodology     │   │
+│  │ • MMR       │  │ • Chunking   │  │ • contributions   │   │
+│  │ • Reranking │  │ • Embedding  │  │ • limitations     │   │
+│  │ • Streaming │  │ • Qdrant     │  │ • future_work     │   │
+│  └─────────────┘  └──────────────┘  └───────────────────┘   │
 └──────────────────────────────┬──────────────────────────────┘
                                │
           ┌────────────────────┴──────────────────┐
@@ -298,4 +298,4 @@ Pull requests welcome! Please open an issue first to discuss what you'd like to 
 
 ## 📄 License
 
-MIT © [Mdhummad](https://github.com/Mdhummad)
+MIT © [Mdhummad](https://github.com/Mdhummad) , [Vaibhavxlegend](https://github.com/VaibhavxLegend)
