@@ -1,6 +1,6 @@
 import pdfParse from "pdf-parse";
 import { v4 as uuid } from "uuid";
-import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { getLLM, getEmbeddings } from "./llmService.js";
@@ -9,24 +9,22 @@ import { upsertChunks } from "./qdrantService.js";
 const CHUNK_SIZE    = parseInt(process.env.CHUNK_SIZE)    || 1000;
 const CHUNK_OVERLAP = parseInt(process.env.CHUNK_OVERLAP) || 200;
 
-const METADATA_PROMPT = ChatPromptTemplate.fromTemplate(`
-Extract metadata from this research paper text.
+async function extractMetadata(text) {
+    try {
+        const llm    = getLLM({ temperature: 0 });
+        const parser = new StringOutputParser();
+        // Direct messages — no template parsing so {curly braces} in PDFs never crash
+        const result = await llm.invoke([
+            new SystemMessage(`Extract metadata from this document text.
 Return ONLY valid JSON with these keys (use null if not found):
 - title: string or null
 - authors: array of strings or null
 - abstract: string (max 400 chars) or null
 - year: number or null
-
-Text:
-{text}
-
-JSON only, no explanation, no markdown:`);
-
-async function extractMetadata(text) {
-    try {
-        const llm   = getLLM({ temperature: 0 });
-        const chain = METADATA_PROMPT.pipe(llm).pipe(new StringOutputParser());
-        const raw     = await chain.invoke({ text: text.slice(0, 2000) });
+JSON only, no explanation, no markdown.`),
+            new HumanMessage(text.slice(0, 2000)),
+        ]);
+        const raw     = await parser.invoke(result);
         const cleaned = raw.replace(/```(?:json)?|```/g, "").trim();
         return JSON.parse(cleaned);
     } catch {

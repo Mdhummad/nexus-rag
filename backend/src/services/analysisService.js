@@ -1,39 +1,15 @@
-import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { getLLM, getEmbeddings } from "./llmService.js";
 import { searchVectors } from "./qdrantService.js";
 
-const ANALYSIS_PROMPTS = {
-    summary: `You are an expert research analyst.
-Write a comprehensive 3-5 paragraph summary of this paper.
-Cover: problem, approach, key findings, and significance.
-Excerpts:
-{context}
-Summary:`,
-
-    methodology: `You are an expert in research methodology.
-Analyze the methodology: experimental design, datasets, metrics, baselines, statistical rigor.
-Excerpts:
-{context}
-Methodology Analysis:`,
-
-    contributions: `You are an expert research evaluator.
-List and evaluate the key contributions with their novelty and significance.
-Excerpts:
-{context}
-Key Contributions:`,
-
-    limitations: `You are a critical research reviewer.
-Identify limitations: methodological, scope, generalizability, and reproducibility concerns.
-Excerpts:
-{context}
-Limitations:`,
-
-    future_work: `You are a research strategist.
-Suggest concrete, specific future research directions based on this paper's findings.
-Excerpts:
-{context}
-Future Research Directions:`,
+// System prompt per analysis type — kept as plain strings, never parsed as templates
+const ANALYSIS_SYSTEMS = {
+    summary:       "You are an expert research analyst. Write a comprehensive 3-5 paragraph summary of this document. Cover: problem, approach, key findings, and significance.",
+    methodology:   "You are an expert in research methodology. Analyze the methodology: experimental design, datasets, metrics, baselines, and statistical rigor.",
+    contributions: "You are an expert research evaluator. List and evaluate the key contributions with their novelty and significance.",
+    limitations:   "You are a critical research reviewer. Identify limitations: methodological, scope, generalizability, and reproducibility concerns.",
+    future_work:   "You are a research strategist. Suggest concrete, specific future research directions based on this document's findings.",
 };
 
 // Representative queries per analysis type to retrieve the most relevant chunks
@@ -46,7 +22,7 @@ const ANALYSIS_QUERIES = {
 };
 
 export async function analyzePaper(paperId, analysisType) {
-    if (!ANALYSIS_PROMPTS[analysisType]) {
+    if (!ANALYSIS_SYSTEMS[analysisType]) {
         throw new Error(`Unknown analysis type: ${analysisType}`);
     }
 
@@ -91,9 +67,14 @@ export async function analyzePaper(paperId, analysisType) {
 
     const start   = Date.now();
     const llm     = getLLM({ temperature: 0.2, maxTokens: 1500 });
-    const prompt  = ChatPromptTemplate.fromTemplate(ANALYSIS_PROMPTS[analysisType]);
-    const chain   = prompt.pipe(llm).pipe(new StringOutputParser());
-    const content = await chain.invoke({ context });
+    const parser  = new StringOutputParser();
+
+    // Direct messages — context (PDF text) in HumanMessage, never parsed as a template
+    const result  = await llm.invoke([
+        new SystemMessage(ANALYSIS_SYSTEMS[analysisType]),
+        new HumanMessage(`Here are excerpts from the document:\n\n${context}`),
+    ]);
+    const content = await parser.invoke(result);
 
     return {
         paperId,

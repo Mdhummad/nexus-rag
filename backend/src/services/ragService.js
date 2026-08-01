@@ -1,25 +1,25 @@
-import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { getLLM, getEmbeddings } from "./llmService.js";
 import { searchVectors } from "./qdrantService.js";
 
+// Direct LLM invoke — bypasses template parsing so {curly braces} in PDFs never crash
+async function invoke(llm, system, human) {
+    const result = await llm.invoke([new SystemMessage(system), new HumanMessage(human)]);
+    return new StringOutputParser().invoke(result);
+}
+
 const TOP_K        = parseInt(process.env.TOP_K)        || 5;
 const RERANK_TOP_K = parseInt(process.env.RERANK_TOP_K) || 3;
 
-const EXPANSION_PROMPT = ChatPromptTemplate.fromTemplate(`
-You are an expert at reformulating questions for better document retrieval.
-Generate 2 semantically different reformulations of this question.
-
-Question: {question}
-
-Return ONLY a JSON array of 2 strings. Example: ["reformulation 1", "reformulation 2"]
-No explanation, no markdown:`);
-
 export async function expandQuery(question) {
     try {
-        const llm   = getLLM({ temperature: 0.3 });
-        const chain = EXPANSION_PROMPT.pipe(llm).pipe(new StringOutputParser());
-        const raw     = await chain.invoke({ question });
+        const llm = getLLM({ temperature: 0.3 });
+        const raw = await invoke(
+            llm,
+            "You are an expert at reformulating questions for better document retrieval. Generate 2 semantically different reformulations of the given question. Return ONLY a JSON array of 2 strings. Example: [\"reformulation 1\", \"reformulation 2\"]. No explanation, no markdown.",
+            question
+        );
         const cleaned = raw.replace(/```(?:json)?|```/g, "").trim();
         const expansions = JSON.parse(cleaned);
         if (!Array.isArray(expansions)) return [question];
@@ -65,26 +65,17 @@ export function mmrRerank(queryEmbedding, candidates, topK, lambda = 0.5) {
     return selected;
 }
 
-const RERANK_PROMPT = ChatPromptTemplate.fromTemplate(`
-Rate how relevant this passage is to the question on a scale 0.0 to 1.0.
-
-Question: {question}
-Passage: {passage}
-
-Return ONLY JSON: {{"score": <float>}}
-No explanation:`);
-
 export async function llmRerank(question, chunks, topK) {
-    const llm   = getLLM({ temperature: 0 });
-    const chain = RERANK_PROMPT.pipe(llm).pipe(new StringOutputParser());
+    const llm = getLLM({ temperature: 0 });
 
     const scored = await Promise.all(
         chunks.map(async (chunk) => {
             try {
-                const raw    = await chain.invoke({
-                    question,
-                    passage: chunk.content.slice(0, 1000),
-                });
+                const raw = await invoke(
+                    llm,
+                    'Rate how relevant the passage is to the question on a scale 0.0 to 1.0. Return ONLY JSON: {"score": <float>}. No explanation.',
+                    `Question: ${question}\nPassage: ${chunk.content.slice(0, 1000)}`
+                );
                 const parsed = JSON.parse(raw.replace(/```(?:json)?|```/g, "").trim());
                 const score  = parseFloat(parsed?.score);
                 return { ...chunk, rerankScore: isNaN(score) ? 0.5 : Math.min(Math.max(score, 0), 1) };
@@ -127,18 +118,11 @@ export async function retrieveChunks(question, queries, paperIds, topK, useMMR) 
     return allChunks.slice(0, topK * 2);
 }
 
-const ANSWER_PROMPT = ChatPromptTemplate.fromTemplate(`
-You are a helpful, precise document assistant. Answer the question using ONLY the provided context excerpts.
+const ANSWER_SYSTEM = `You are a helpful, precise document assistant. Answer the question using ONLY the provided context excerpts.
 The documents may be research papers, resumes, reports, books, or any other type of PDF.
-Cite sources inline as [Source {number}, Page {page}].
+Cite sources inline as [Source N, Page P] where N is the source number shown in the context.
 If the context does not contain enough information to answer fully, say what you can find and note what is missing — never hallucinate facts.
-
-Context:
-{context}
-
-Question: {question}
-
-Provide a clear, well-structured answer based strictly on the context above.`);
+Provide a clear, well-structured answer based strictly on the context above.`;
 
 function buildContext(chunks) {
     return chunks
@@ -212,8 +196,7 @@ export async function runRAGPipeline({
     const t4      = Date.now();
     const context = buildContext(chunks);
     const llm     = getLLM({ temperature: 0 });
-    const chain   = ANSWER_PROMPT.pipe(llm).pipe(new StringOutputParser());
-    const answer  = await chain.invoke({ context, question });
+    const answer  = await invoke(llm, ANSWER_SYSTEM, `Context:\n${context}\n\nQuestion: ${question}`);
     timings.generation = Date.now() - t4;
 
     return {
@@ -258,11 +241,15 @@ export async function runRAGPipelineStream({
     const t4      = Date.now();
     const context = buildContext(chunks);
     const llm     = getLLM({ temperature: 0 });
-    const chain   = ANSWER_PROMPT.pipe(llm).pipe(new StringOutputParser());
+    const parser  = new StringOutputParser();
 
-    const stream = await chain.stream({ context, question });
-    for await (const token of stream) {
-        emit("token", { content: token });
+    const stream = await llm.stream([
+        new SystemMessage(ANSWER_SYSTEM),
+        new HumanMessage(`Context:\n${context}\n\nQuestion: ${question}`),
+    ]);
+    for await (const chunk of stream) {
+        const token = await parser.invoke(chunk);
+        if (token) emit("token", { content: token });
     }
     timings.generation = Date.now() - t4;
 
