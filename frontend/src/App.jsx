@@ -742,7 +742,7 @@ export default function App() {
           {[
             { label: "Top-K Results",  sub: "Chunks per query",       k: "topK",         min: 3,   max: 15,   step: 1,   icon: IC.zap    },
             { label: "Chunk Size",     sub: "Characters per chunk",   k: "chunkSize",    min: 400, max: 2000, step: 100, icon: IC.file   },
-            { label: "Chunk Overlap",  sub: "Overlap between chunks", k: "chunkOverlap", min: 0,   max: 400,  step: 50,  icon: IC.layers },
+            { label: "Chunk Overlap",  sub: "Overlap between chunks", k: "chunkOverlap", min: 0,   max: 400,  step: 50,  icon: IC.copy   },
           ].map((item, i) => {
             const val = pipelineCfg[item.k];
             const pct = ((val - item.min) / (item.max - item.min)) * 100;
