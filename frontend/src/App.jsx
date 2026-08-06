@@ -66,21 +66,21 @@ function Spinner({ size = 15, color = T.accent }) {
 
 /* ─── Toast system ──────────────────────────────────────────────────────────── */
 function useToasts() {
-  const [list, setList] = useState([]);
+  const [toasts, setToasts] = useState([]);
   const add = useCallback((msg, type = "error") => {
     const id = newId();
-    setList(p => [...p, { id, msg, type }]);
-    setTimeout(() => setList(p => p.filter(t => t.id !== id)), 4500);
+    setToasts(p => [...p, { id, msg, type }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4500);
   }, []);
-  const rm = useCallback(id => setList(p => p.filter(t => t.id !== id)), []);
-  return { list, add, rm };
+  const rm = useCallback(id => setToasts(p => p.filter(t => t.id !== id)), []);
+  return { toasts, add, rm };
 }
 
-function Toasts({ list, rm }) {
-  if (!list.length) return null;
+function Toasts({ toasts, rm }) {
+  if (!toasts?.length) return null;
   return (
     <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
-      {list.map(t => (
+      {toasts.map(t => (
         <div key={t.id} style={{
           background: t.type === "error" ? "rgba(248,113,113,0.08)" : "rgba(74,222,128,0.08)",
           border: `1px solid ${t.type === "error" ? "rgba(248,113,113,0.3)" : "rgba(74,222,128,0.3)"}`,
@@ -873,7 +873,7 @@ export default function App() {
         <SourcesPanel msg={panelMsg} />
       )}
 
-      <Toasts list={toasts} rm={rmToast} />
+      <Toasts toasts={toasts} rm={rmToast} />
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
