@@ -4,30 +4,31 @@ import { api, queryStream } from "./utils/api.js";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 
-/* ─── ID generator ──────────────────────────────────────────────────────────── */
 let _id = 0;
 const newId = () => `m${++_id}`;
 
-/* ─── Design tokens ─────────────────────────────────────────────────────────── */
+/* ─── Design tokens — Amber / Deep Black ───────────────────────────────────── */
 const T = {
-  bg:          "#0d0f17",
-  sidebar:     "#0f1119",
-  surface:     "#13161f",
-  surfaceHigh: "#181c27",
-  accent:      "#6366f1",
-  accentSoft:  "rgba(99,102,241,0.14)",
-  accentBorder:"rgba(99,102,241,0.35)",
-  border:      "rgba(255,255,255,0.07)",
-  borderMid:   "rgba(255,255,255,0.11)",
-  t1:          "rgba(255,255,255,0.92)",
-  t2:          "rgba(255,255,255,0.55)",
-  t3:          "rgba(255,255,255,0.28)",
-  red:         "#f87171",
-  green:       "#4ade80",
-  yellow:      "#facc15",
+  bg:           "#09090b",
+  sidebar:      "#0e0e11",
+  surface:      "#131315",
+  surfaceHi:    "#1a1a1e",
+  accent:       "#f59e0b",
+  accentDim:    "#d97706",
+  accentSoft:   "rgba(245,158,11,0.10)",
+  accentBorder: "rgba(245,158,11,0.28)",
+  accentGlow:   "rgba(245,158,11,0.18)",
+  border:       "rgba(255,255,255,0.06)",
+  borderMid:    "rgba(255,255,255,0.10)",
+  t1:           "rgba(255,255,255,0.92)",
+  t2:           "rgba(255,255,255,0.52)",
+  t3:           "rgba(255,255,255,0.26)",
+  red:          "#f87171",
+  green:        "#34d399",
+  yellow:       "#fbbf24",
 };
 
-/* ─── Tiny SVG icon ─────────────────────────────────────────────────────────── */
+/* ─── Icons ─────────────────────────────────────────────────────────────────── */
 function Ic({ d, size = 16, sw = 1.8, fill = "none" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={fill}
@@ -46,7 +47,6 @@ const IC = {
   copy:    <><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>,
   chevron: <polyline points="6 9 12 15 18 9"/>,
   sparkle: <><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4M19 17v4M3 5h4M17 19h4"/></>,
-  layers:  <><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>,
   clock:   <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
   file:    <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>,
   menu:    <><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></>,
@@ -59,7 +59,7 @@ const IC = {
 function Spinner({ size = 15, color = T.accent }) {
   return <div style={{
     width: size, height: size, borderRadius: "50%",
-    border: `2px solid ${color}25`, borderTopColor: color,
+    border: `2px solid ${color}22`, borderTopColor: color,
     animation: "spin .7s linear infinite", flexShrink: 0,
   }} />;
 }
@@ -82,12 +82,12 @@ function Toasts({ toasts, rm }) {
     <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
       {toasts.map(t => (
         <div key={t.id} style={{
-          background: t.type === "error" ? "rgba(248,113,113,0.08)" : "rgba(74,222,128,0.08)",
-          border: `1px solid ${t.type === "error" ? "rgba(248,113,113,0.3)" : "rgba(74,222,128,0.3)"}`,
+          background: t.type === "error" ? "rgba(248,113,113,0.09)" : "rgba(52,211,153,0.09)",
+          border: `1px solid ${t.type === "error" ? "rgba(248,113,113,0.3)" : "rgba(52,211,153,0.3)"}`,
           borderRadius: 10, padding: "11px 14px", display: "flex", alignItems: "center",
           gap: 10, fontSize: 13, color: t.type === "error" ? T.red : T.green,
           maxWidth: 320, backdropFilter: "blur(20px)", animation: "fadeUp .25s ease",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
         }}>
           <span style={{ flex: 1, lineHeight: 1.4 }}>{t.msg}</span>
           <button onClick={() => rm(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", opacity: 0.5, padding: 2 }}>
@@ -109,12 +109,12 @@ function PipelineBar({ step }) {
           <div style={{
             display: "flex", alignItems: "center", gap: 5,
             padding: "3px 9px", borderRadius: 20, fontSize: 11, fontWeight: 500,
-            background: i < step ? T.accentSoft : i === step ? "rgba(99,102,241,0.22)" : "rgba(255,255,255,0.04)",
-            border: `1px solid ${i < step ? T.accentBorder : i === step ? "rgba(99,102,241,0.5)" : T.border}`,
-            color: i < step ? "#a5b4fc" : i === step ? "#c7d2fe" : T.t3,
+            background: i < step ? T.accentSoft : i === step ? T.accentGlow : "rgba(255,255,255,0.04)",
+            border: `1px solid ${i < step ? T.accentBorder : i === step ? "rgba(245,158,11,0.45)" : T.border}`,
+            color: i < step ? T.accent : i === step ? "#fcd34d" : T.t3,
             transition: "all .3s",
           }}>
-            {i < step ? <Ic d={IC.check} size={10} /> : i === step ? <Spinner size={10} color="#818cf8" /> : null}
+            {i < step ? <Ic d={IC.check} size={10} /> : i === step ? <Spinner size={10} color={T.accent} /> : null}
             {s}
           </div>
           {i < STEPS.length - 1 && (
@@ -133,8 +133,8 @@ function CopyBtn({ text }) {
     <button onClick={() => {
       navigator.clipboard.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 2000); });
     }} style={{
-      background: done ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.05)",
-      border: `1px solid ${done ? "rgba(74,222,128,0.3)" : T.border}`,
+      background: done ? "rgba(52,211,153,0.1)" : "rgba(255,255,255,0.05)",
+      border: `1px solid ${done ? "rgba(52,211,153,0.3)" : T.border}`,
       borderRadius: 7, padding: "4px 10px", cursor: "pointer",
       display: "flex", alignItems: "center", gap: 5,
       color: done ? T.green : T.t3, fontSize: 11, transition: "all .2s",
@@ -179,7 +179,7 @@ function SourceCard({ src, idx }) {
         <div style={{
           minWidth: 20, height: 20, borderRadius: 5, background: T.accentSoft,
           border: `1px solid ${T.accentBorder}`, display: "flex", alignItems: "center",
-          justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#a5b4fc", flexShrink: 0,
+          justifyContent: "center", fontSize: 10, fontWeight: 700, color: T.accent, flexShrink: 0,
         }}>{idx + 1}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: T.t1, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -205,54 +205,39 @@ function SourceCard({ src, idx }) {
   );
 }
 
-/* ─── Sources panel (right column) ─────────────────────────────────────────── */
+/* ─── Sources panel ─────────────────────────────────────────────────────────── */
 function SourcesPanel({ msg }) {
-  if (!msg || (!msg.sources?.length && !msg.confidence)) return (
-    <div style={{ flex: "0 0 0", overflow: "hidden", transition: "flex .3s ease" }} />
-  );
-
+  if (!msg) return null;
   return (
     <div style={{
-      flex: "0 0 300px", borderLeft: `1px solid ${T.border}`,
+      flex: "0 0 290px", borderLeft: `1px solid ${T.border}`,
       background: T.sidebar, display: "flex", flexDirection: "column", overflow: "hidden",
-      transition: "flex .3s ease",
     }}>
-      <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+      <div style={{ padding: "14px 15px 10px", borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: T.t1, display: "flex", alignItems: "center", gap: 7 }}>
-          <Ic d={IC.file} size={14} />
+          <span style={{ color: T.accent }}><Ic d={IC.file} size={14} /></span>
           Sources
           {msg.sources?.length > 0 && (
-            <span style={{ fontSize: 11, fontWeight: 400, color: T.t3 }}>
-              · {msg.sources.length} found
-            </span>
+            <span style={{ fontSize: 11, fontWeight: 400, color: T.t3 }}>· {msg.sources.length}</span>
           )}
         </div>
       </div>
-
       <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-        {/* Confidence */}
         {msg.confidence != null && (
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px" }}>
             <Confidence v={msg.confidence} />
           </div>
         )}
-
-        {/* Timing badges */}
         {msg.timings && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
             {Object.entries(msg.timings).map(([k, v]) => (
               <div key={k} style={{
                 fontSize: 10, padding: "3px 8px", borderRadius: 20,
-                background: T.accentSoft, border: `1px solid ${T.accentBorder}`,
-                color: "#a5b4fc",
-              }}>
-                {k}: {v}ms
-              </div>
+                background: T.accentSoft, border: `1px solid ${T.accentBorder}`, color: T.accent,
+              }}>{k}: {v}ms</div>
             ))}
           </div>
         )}
-
-        {/* Expanded queries */}
         {msg.expandedQueries?.length > 0 && (
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px" }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: T.t3, letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 7 }}>
@@ -265,8 +250,6 @@ function SourcesPanel({ msg }) {
             ))}
           </div>
         )}
-
-        {/* Source cards */}
         {msg.sources?.length > 0 && (
           <>
             <div style={{ fontSize: 10, fontWeight: 600, color: T.t3, letterSpacing: ".05em", textTransform: "uppercase" }}>
@@ -275,8 +258,6 @@ function SourcesPanel({ msg }) {
             {msg.sources.map((s, i) => <SourceCard key={i} src={s} idx={i} />)}
           </>
         )}
-
-        {/* Processing time */}
         {msg.processingTimeMs && (
           <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: T.t3 }}>
             <Ic d={IC.clock} size={11} />
@@ -292,12 +273,13 @@ function SourcesPanel({ msg }) {
 function Bubble({ msg }) {
   if (msg.role === "user") {
     return (
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 18 }}>
         <div style={{
-          maxWidth: "72%", background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
+          maxWidth: "72%",
+          background: `linear-gradient(135deg, ${T.accentDim} 0%, ${T.accent} 100%)`,
           borderRadius: "16px 16px 4px 16px", padding: "11px 15px",
-          fontSize: 14, color: "#fff", lineHeight: 1.65,
-          boxShadow: "0 2px 16px rgba(99,102,241,0.25)",
+          fontSize: 14, color: "#09090b", lineHeight: 1.65, fontWeight: 500,
+          boxShadow: `0 2px 20px ${T.accentGlow}`,
         }}>
           {msg.content}
         </div>
@@ -308,34 +290,25 @@ function Bubble({ msg }) {
   if (msg.role === "assistant") {
     return (
       <div style={{ display: "flex", gap: 11, marginBottom: 24, alignItems: "flex-start" }}>
-        {/* Avatar */}
         <div style={{
           width: 30, height: 30, borderRadius: 8, flexShrink: 0, marginTop: 1,
           background: T.accentSoft, border: `1px solid ${T.accentBorder}`,
-          display: "flex", alignItems: "center", justifyContent: "center", color: "#818cf8",
+          display: "flex", alignItems: "center", justifyContent: "center", color: T.accent,
         }}>
           <Ic d={IC.brain} size={15} />
         </div>
-
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Pipeline bar while streaming */}
           {msg.streaming && <PipelineBar step={msg.pipelineStep ?? 3} />}
-
-          {/* Answer */}
           <div style={{ fontSize: 14, lineHeight: 1.75, color: T.t1 }} className="markdown-body">
             <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
               {msg.content || (msg.streaming ? "▍" : "")}
             </ReactMarkdown>
           </div>
-
-          {/* Action row after done */}
           {!msg.streaming && msg.content && (
             <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
               <CopyBtn text={msg.content} />
               {msg.expandedQueries?.length > 0 && (
-                <span style={{ fontSize: 11, color: T.t3 }}>
-                  +{msg.expandedQueries.length} query expansions
-                </span>
+                <span style={{ fontSize: 11, color: T.t3 }}>+{msg.expandedQueries.length} expansions</span>
               )}
             </div>
           )}
@@ -366,14 +339,12 @@ function Empty({ count }) {
       <div style={{
         width: 72, height: 72, borderRadius: 20, background: T.accentSoft,
         border: `1px solid ${T.accentBorder}`, display: "flex", alignItems: "center",
-        justifyContent: "center", color: "#818cf8", animation: "float 3s ease-in-out infinite",
+        justifyContent: "center", color: T.accent, animation: "float 3s ease-in-out infinite",
       }}>
         <Ic d={IC.file} size={32} sw={1.2} />
       </div>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 19, fontWeight: 700, color: T.t1, marginBottom: 8 }}>
-          Upload a document to begin
-        </div>
+        <div style={{ fontSize: 19, fontWeight: 700, color: T.t1, marginBottom: 8 }}>Upload a document to begin</div>
         <div style={{ fontSize: 14, color: T.t2, maxWidth: 340, lineHeight: 1.65 }}>
           Nexus uses multi-query expansion, MMR and LLM re-ranking to give precise cited answers from your PDFs.
         </div>
@@ -382,35 +353,30 @@ function Empty({ count }) {
         {["Multi-query expansion", "MMR diversity filter", "LLM re-ranking", "Streaming answers", "Inline citations"].map(f => (
           <span key={f} style={{
             fontSize: 11, padding: "4px 11px", borderRadius: 20,
-            background: T.accentSoft, border: `1px solid ${T.accentBorder}`, color: "#a5b4fc",
+            background: T.accentSoft, border: `1px solid ${T.accentBorder}`, color: T.accent,
           }}>{f}</span>
         ))}
       </div>
     </div>
   );
-
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 40 }}>
       <div style={{
         width: 56, height: 56, borderRadius: 16, background: T.accentSoft,
         border: `1px solid ${T.accentBorder}`, display: "flex", alignItems: "center",
-        justifyContent: "center", color: "#818cf8", animation: "float 3s ease-in-out infinite",
+        justifyContent: "center", color: T.accent, animation: "float 3s ease-in-out infinite",
       }}>
         <Ic d={IC.sparkle} size={24} sw={1.5} />
       </div>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: T.t1, marginBottom: 5 }}>
-          Ask anything about your documents
-        </div>
-        <div style={{ fontSize: 13, color: T.t3 }}>
-          {count} document{count > 1 ? "s" : ""} ready · Press Enter to send
-        </div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: T.t1, marginBottom: 5 }}>Ask anything about your documents</div>
+        <div style={{ fontSize: 13, color: T.t3 }}>{count} document{count > 1 ? "s" : ""} ready · Press Enter to send</div>
       </div>
     </div>
   );
 }
 
-/* ─── Paper chip (sidebar) ──────────────────────────────────────────────────── */
+/* ─── Paper chip ────────────────────────────────────────────────────────────── */
 function PaperChip({ paper, selected, onToggle, onDelete, deleting }) {
   return (
     <div style={{
@@ -431,8 +397,7 @@ function PaperChip({ paper, selected, onToggle, onDelete, deleting }) {
         }} />
         <div style={{ minWidth: 0 }}>
           <div style={{
-            fontSize: 12, fontWeight: 500,
-            color: selected ? T.t1 : T.t2,
+            fontSize: 12, fontWeight: 500, color: selected ? T.t1 : T.t2,
             lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>
             {paper.title || paper.filename}
@@ -453,71 +418,36 @@ function PaperChip({ paper, selected, onToggle, onDelete, deleting }) {
   );
 }
 
-/* ─── Pipeline config ───────────────────────────────────────────────────────── */
-function PipelineCfg({ cfg, onChange }) {
-  const [open, setOpen] = useState(false);
-  const tog = k => onChange({ ...cfg, [k]: !cfg[k] });
+/* ─── Top slider bar (3 sliders side by side) ───────────────────────────────── */
+function SliderBar({ cfg, onChange }) {
   const set = (k, v) => onChange({ ...cfg, [k]: v });
-
-  const Toggle = ({ label, desc, k }) => (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 600, color: T.t2 }}>{label}</div>
-        <div style={{ fontSize: 10, color: T.t3, marginTop: 1 }}>{desc}</div>
-      </div>
-      <button onClick={() => tog(k)} style={{
-        width: 36, height: 19, borderRadius: 10, border: "none", cursor: "pointer",
-        background: cfg[k] ? T.accent : "rgba(255,255,255,0.1)",
-        position: "relative", transition: "background .2s", flexShrink: 0,
-      }}>
-        <div style={{
-          width: 13, height: 13, borderRadius: "50%", background: "#fff",
-          position: "absolute", top: 3, left: cfg[k] ? 20 : 3,
-          transition: "left .2s", boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
-        }} />
-      </button>
-    </div>
-  );
-
-  const Slider = ({ label, k, min, max, step }) => (
-    <div style={{ padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: T.t2 }}>{label}</div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#a5b4fc" }}>{cfg[k]}</div>
+  const Item = ({ label, k, min, max, step }) => (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: T.t2 }}>{label}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cfg[k]}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={cfg[k]}
         onChange={e => set(k, Number(e.target.value))}
-        style={{ width: "100%", accentColor: T.accent, cursor: "pointer" }} />
+        style={{ width: "100%", accentColor: T.accent, cursor: "pointer", height: 3 }}
+      />
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: T.t3 }}>
+        <span>{min}</span><span>{max}</span>
+      </div>
     </div>
   );
 
   return (
-    <div style={{ borderTop: `1px solid ${T.border}`, flexShrink: 0 }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        width: "100%", background: "none", border: "none", cursor: "pointer",
-        padding: "9px 14px", display: "flex", alignItems: "center", gap: 7, color: T.t3,
-      }}>
-        <Ic d={IC.layers} size={13} />
-        <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", flex: 1, textAlign: "left" }}>
-          Pipeline Config
-        </span>
-        <div style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .2s" }}>
-          <Ic d={IC.chevron} size={12} />
-        </div>
-      </button>
-      {open && (
-        <div style={{ padding: "0 14px 12px" }}>
-          <Toggle label="Query Expansion" desc="2 extra query variants" k="useQueryExpansion" />
-          <Toggle label="MMR Re-ranking" desc="Diversity filter" k="useMMR" />
-          <Toggle label="LLM Re-ranking" desc="Score by relevance" k="useReranking" />
-          <Slider label="Top-K Results" k="topK" min={3} max={15} step={1} />
-          <div style={{ marginTop: 9, padding: "7px 9px", background: T.accentSoft, borderRadius: 7, border: `1px solid ${T.accentBorder}` }}>
-            <div style={{ fontSize: 10, color: T.t3, lineHeight: 1.5 }}>
-              ⚠ Chunk settings apply on next upload only.
-            </div>
-          </div>
-        </div>
-      )}
+    <div style={{
+      display: "flex", alignItems: "stretch", gap: 0,
+      borderBottom: `1px solid ${T.border}`,
+      background: T.sidebar, flexShrink: 0,
+    }}>
+      <Item label="Top-K Results"  k="topK"         min={3}   max={15}   step={1}   />
+      <div style={{ width: 1, background: T.border, margin: "10px 0" }} />
+      <Item label="Chunk Size"     k="chunkSize"    min={400} max={2000} step={100} />
+      <div style={{ width: 1, background: T.border, margin: "10px 0" }} />
+      <Item label="Chunk Overlap"  k="chunkOverlap" min={0}   max={400}  step={50}  />
     </div>
   );
 }
@@ -537,23 +467,20 @@ export default function App() {
   const [deleting,     setDeleting]     = useState(null);
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
   const [uploadName,   setUploadName]   = useState(null);
+  const [showSources,  setShowSources]  = useState(true);
 
-  // Which message's sources to show in the right panel
-  const [activePanel, setActivePanel] = useState(null); // message id
-
+  // Query Expansion, MMR, LLM Reranking are ALWAYS ON — not configurable
   const [pipelineCfg, setPipelineCfg] = useState({
-    useQueryExpansion: true,
-    useMMR:            true,
-    useReranking:      true,
-    topK:              5,
-    chunkSize:         1000,
-    chunkOverlap:      200,
+    topK:         5,
+    chunkSize:    1000,
+    chunkOverlap: 200,
   });
 
-  const abortRef     = useRef(null);
-  const bottomRef    = useRef(null);
-  const fileRef      = useRef(null);
-  const textareaRef  = useRef(null);
+  const [activePanel, setActivePanel] = useState(null);
+  const abortRef    = useRef(null);
+  const bottomRef   = useRef(null);
+  const fileRef     = useRef(null);
+  const textareaRef = useRef(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => {
@@ -563,7 +490,6 @@ export default function App() {
     }
   }, [input]);
 
-  // Auto-show sources panel for latest assistant message
   useEffect(() => {
     const last = [...messages].reverse().find(m => m.role === "assistant" && (m.sources?.length || m.confidence != null));
     if (last) setActivePanel(last.id);
@@ -590,11 +516,9 @@ export default function App() {
         ok++;
       } catch (err) { toast(`Failed: "${file.name}": ${err.message}`); }
     }
-    setUploading(false);
-    setUploadName(null);
+    setUploading(false); setUploadName(null);
     if (ok > 0) { toast(`Uploaded ${ok} file${ok > 1 ? "s" : ""}`, "success"); reloadPapers(); }
   };
-
   const onDrop = useCallback(e => { e.preventDefault(); handleUpload(e.dataTransfer.files); }, []);
 
   /* ── Delete ─────────────────────────────────────────────────────────────── */
@@ -603,8 +527,7 @@ export default function App() {
     try {
       await api.deletePaper(id);
       setSelectedIds(p => { const n = new Set(p); n.delete(id); return n; });
-      reloadPapers();
-      toast("Paper deleted", "success");
+      reloadPapers(); toast("Paper deleted", "success");
     } catch (err) { toast(`Delete failed: ${err.message}`); }
     finally { setDeleting(null); }
   };
@@ -616,8 +539,7 @@ export default function App() {
     if (!papers.length) { toast("Upload at least one document first"); return; }
 
     setInput("");
-    const uid = newId();
-    const aid = newId();
+    const uid = newId(), aid = newId();
     setMessages(p => [...p,
       { id: uid, role: "user",      content: q },
       { id: aid, role: "assistant", content: "", streaming: true, pipelineStep: 0 },
@@ -632,7 +554,14 @@ export default function App() {
     const paperIds = selectedIds.size > 0 ? [...selectedIds] : null;
 
     abortRef.current = await queryStream(
-      { question: q, paperIds, ...pipelineCfg },
+      {
+        question: q,
+        paperIds,
+        topK:              pipelineCfg.topK,
+        useQueryExpansion: true,   // always on
+        useMMR:            true,   // always on
+        useReranking:      true,   // always on
+      },
       {
         onToken: t => {
           clearInterval(stepTimer);
@@ -663,9 +592,7 @@ export default function App() {
   };
 
   const clearChat = () => { if (!streaming) { setMessages([]); setActivePanel(null); } };
-
-  /* ── Active panel message ────────────────────────────────────────────────── */
-  const panelMsg = activePanel ? messages.find(m => m.id === activePanel) : null;
+  const panelMsg  = activePanel ? messages.find(m => m.id === activePanel) : null;
 
   /* ─── Render ─────────────────────────────────────────────────────────────── */
   return (
@@ -681,46 +608,49 @@ export default function App() {
         {/* Logo */}
         <div style={{ padding: "16px 14px 12px", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 16 }}>
-            <img src="/logo.png" alt="Nexus" style={{ width: 34, height: 34, borderRadius: 8, boxShadow: `0 2px 12px rgba(99,102,241,0.4)`, objectFit: "cover" }} />
+            <img src="/logo.png" alt="Nexus" style={{
+              width: 34, height: 34, borderRadius: 8, objectFit: "cover",
+              boxShadow: `0 2px 14px ${T.accentGlow}`,
+            }} />
             <div>
-              <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: "-.02em", background: "linear-gradient(90deg,#c7d2fe,#a5b4fc)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                NEXUS RAG
-              </div>
+              <div style={{
+                fontWeight: 800, fontSize: 14, letterSpacing: "-.02em",
+                background: `linear-gradient(90deg, ${T.accent}, #fcd34d)`,
+                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+              }}>NEXUS RAG</div>
               <div style={{ fontSize: 9, color: T.t3, letterSpacing: ".07em" }}>RESEARCH AI</div>
             </div>
           </div>
 
           {/* Upload zone */}
-          <div
-            onDrop={onDrop} onDragOver={e => e.preventDefault()}
+          <div onDrop={onDrop} onDragOver={e => e.preventDefault()}
             onClick={() => !uploading && fileRef.current?.click()}
             style={{
               border: `1.5px dashed ${T.accentBorder}`, borderRadius: 10,
               padding: "13px 10px", textAlign: "center", cursor: "pointer",
               background: T.accentSoft, marginBottom: 14, transition: "all .15s",
             }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = T.accent}
-            onMouseLeave={e => e.currentTarget.style.borderColor = T.accentBorder}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = T.accentGlow; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = T.accentBorder; e.currentTarget.style.background = T.accentSoft; }}
           >
             <input ref={fileRef} type="file" accept=".pdf" multiple style={{ display: "none" }}
               onChange={e => { handleUpload(e.target.files); e.target.value = ""; }} />
             {uploading ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
                 <Spinner size={20} />
-                <div style={{ fontSize: 11, color: "#a5b4fc" }}>
+                <div style={{ fontSize: 11, color: T.accent }}>
                   {uploadName ? `Processing ${uploadName.slice(0, 20)}…` : "Uploading…"}
                 </div>
               </div>
             ) : (
               <>
-                <div style={{ color: "#818cf8", marginBottom: 5 }}><Ic d={IC.upload} size={20} sw={1.5} /></div>
+                <div style={{ color: T.accent, marginBottom: 5 }}><Ic d={IC.upload} size={20} sw={1.5} /></div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: T.t2 }}>Drop PDFs or click to upload</div>
                 <div style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>Multiple files supported</div>
               </>
             )}
           </div>
 
-          {/* Paper count + actions */}
           {papers.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
               <span style={{ fontSize: 10, fontWeight: 600, color: T.t3, letterSpacing: ".06em", textTransform: "uppercase" }}>
@@ -734,7 +664,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Scrollable paper list + pipeline config */}
         <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
           <div style={{ padding: "0 14px 14px" }}>
             {papersLoading ? (
@@ -760,43 +689,42 @@ export default function App() {
               </div>
             </div>
           )}
-          <PipelineCfg cfg={pipelineCfg} onChange={setPipelineCfg} />
         </div>
       </div>
 
-      {/* ════════════════════════════════════════════════════ CHAT AREA ═══ */}
+      {/* ════════════════════════════════════════════════════ MAIN AREA ═══ */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
 
         {/* Header */}
         <div style={{
-          padding: "0 16px", height: 52, borderBottom: `1px solid ${T.border}`,
+          padding: "0 16px", height: 50, borderBottom: `1px solid ${T.border}`,
           display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
-          background: "rgba(13,15,23,0.8)", backdropFilter: "blur(12px)",
+          background: T.sidebar, backdropFilter: "blur(12px)",
         }}>
           <button onClick={() => setSidebarOpen(o => !o)} style={{
             background: "rgba(255,255,255,0.05)", border: `1px solid ${T.border}`,
             borderRadius: 7, padding: "5px 7px", cursor: "pointer", color: T.t2, transition: "all .15s",
           }}
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.09)"}
-            onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+            onMouseEnter={e => e.currentTarget.style.borderColor = T.accentBorder}
+            onMouseLeave={e => e.currentTarget.style.borderColor = T.border}
           >
             <Ic d={IC.menu} size={15} />
           </button>
 
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.t1 }}>Research Chat</div>
             <div style={{ fontSize: 10, color: T.t3 }}>Groq · LLaMA 3.1 · Qdrant · Local Embeddings</div>
           </div>
 
-          {/* Panel toggle (when sources exist) */}
           {panelMsg && (
-            <button onClick={() => setActivePanel(p => p ? null : panelMsg.id)} style={{
-              background: T.accentSoft, border: `1px solid ${T.accentBorder}`,
-              borderRadius: 7, padding: "5px 9px", cursor: "pointer", color: "#a5b4fc",
+            <button onClick={() => setShowSources(s => !s)} style={{
+              background: showSources ? T.accentSoft : "rgba(255,255,255,0.04)",
+              border: `1px solid ${showSources ? T.accentBorder : T.border}`,
+              borderRadius: 7, padding: "5px 9px", cursor: "pointer",
+              color: showSources ? T.accent : T.t3,
               fontSize: 11, display: "flex", alignItems: "center", gap: 5, transition: "all .15s",
             }}>
-              <Ic d={IC.panel} size={13} />
-              Sources
+              <Ic d={IC.panel} size={13} /> Sources
             </button>
           )}
 
@@ -811,16 +739,52 @@ export default function App() {
           )}
         </div>
 
-        {/* Messages */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "28px 0 8px" }}>
-          <div style={{ maxWidth: 760, margin: "0 auto", padding: "0 24px" }}>
-            {messages.length === 0 ? (
-              <Empty count={papers.length} />
-            ) : (
-              messages.map(m => <Bubble key={m.id} msg={m} />)
-            )}
-            <div ref={bottomRef} />
+        {/* ─── Top slider bar — 3 sliders side by side ─── */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 0,
+          borderBottom: `1px solid ${T.border}`,
+          background: T.surface, flexShrink: 0, padding: "0 16px",
+        }}>
+          {[
+            { label: "Top-K Results",  k: "topK",         min: 3,   max: 15,   step: 1   },
+            { label: "Chunk Size",     k: "chunkSize",    min: 400, max: 2000, step: 100 },
+            { label: "Chunk Overlap",  k: "chunkOverlap", min: 0,   max: 400,  step: 50  },
+          ].map((item, i) => (
+            <div key={item.k} style={{
+              flex: 1, padding: "10px 14px",
+              borderLeft: i > 0 ? `1px solid ${T.border}` : "none",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: T.t2 }}>{item.label}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{pipelineCfg[item.k]}</span>
+              </div>
+              <input type="range" min={item.min} max={item.max} step={item.step} value={pipelineCfg[item.k]}
+                onChange={e => setPipelineCfg(p => ({ ...p, [item.k]: Number(e.target.value) }))}
+                style={{ width: "100%", accentColor: T.accent, cursor: "pointer" }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: T.t3, marginTop: 1 }}>
+                <span>{item.min}</span><span>{item.max}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Chat + sources panel */}
+        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+
+          {/* Messages */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "28px 0 8px" }}>
+            <div style={{ maxWidth: 760, margin: "0 auto", padding: "0 24px" }}>
+              {messages.length === 0
+                ? <Empty count={papers.length} />
+                : messages.map(m => <Bubble key={m.id} msg={m} />)
+              }
+              <div ref={bottomRef} />
+            </div>
           </div>
+
+          {/* Sources panel */}
+          {panelMsg && showSources && <SourcesPanel msg={panelMsg} />}
         </div>
 
         {/* Input bar */}
@@ -830,14 +794,9 @@ export default function App() {
               display: "flex", alignItems: "flex-end", gap: 8,
               background: T.surface, border: `1px solid ${T.borderMid}`,
               borderRadius: 14, padding: "10px 12px",
-              boxShadow: "0 2px 20px rgba(0,0,0,0.3)", transition: "border-color .15s",
-            }}
-              onFocus={() => {}}
-            >
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={e => setInput(e.target.value)}
+              boxShadow: "0 2px 24px rgba(0,0,0,0.4)",
+            }}>
+              <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKey}
                 placeholder="Ask anything about your documents…"
                 rows={1}
@@ -845,20 +804,27 @@ export default function App() {
                   flex: 1, background: "none", border: "none", outline: "none",
                   color: T.t1, fontSize: 14, lineHeight: 1.6, resize: "none",
                   fontFamily: "inherit", minHeight: 22,
-                  "::placeholder": { color: T.t3 },
                 }}
               />
               <button
                 onClick={streaming ? () => { abortRef.current?.abort(); setStreaming(false); } : handleSend}
                 style={{
                   width: 34, height: 34, borderRadius: 9, border: "none", cursor: "pointer",
-                  background: streaming ? "rgba(248,113,113,0.15)" : (input.trim() ? T.accent : "rgba(255,255,255,0.07)"),
-                  color: streaming ? T.red : (input.trim() ? "#fff" : T.t3),
+                  background: streaming
+                    ? "rgba(248,113,113,0.15)"
+                    : input.trim()
+                      ? `linear-gradient(135deg, ${T.accentDim}, ${T.accent})`
+                      : "rgba(255,255,255,0.07)",
+                  color: streaming ? T.red : input.trim() ? "#09090b" : T.t3,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   transition: "all .15s", flexShrink: 0,
+                  boxShadow: input.trim() && !streaming ? `0 2px 12px ${T.accentGlow}` : "none",
                 }}
               >
-                {streaming ? <Ic d={IC.stop} size={13} fill="currentColor" sw={0} /> : <Ic d={IC.send} size={14} />}
+                {streaming
+                  ? <Ic d={IC.stop} size={13} fill="currentColor" sw={0} />
+                  : <Ic d={IC.send} size={14} />
+                }
               </button>
             </div>
             <div style={{ textAlign: "center", marginTop: 7, fontSize: 10, color: T.t3 }}>
@@ -868,42 +834,38 @@ export default function App() {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════ SOURCES PANEL ═══ */}
-      {panelMsg && activePanel && (
-        <SourcesPanel msg={panelMsg} />
-      )}
-
       <Toasts toasts={toasts} rm={rmToast} />
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; }
-        body { margin: 0; }
+        body { margin: 0; background: ${T.bg}; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
-        textarea::placeholder { color: rgba(255,255,255,0.25); }
-        @keyframes spin  { to { transform: rotate(360deg); } }
-        @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-        .markdown-body h1,.markdown-body h2,.markdown-body h3 { color: rgba(255,255,255,0.92); font-weight:700; margin:.9em 0 .4em; }
-        .markdown-body h1 { font-size:1.3em; }
-        .markdown-body h2 { font-size:1.15em; }
-        .markdown-body h3 { font-size:1.05em; }
+        ::-webkit-scrollbar-thumb { background: rgba(245,158,11,0.15); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(245,158,11,0.3); }
+        textarea::placeholder { color: ${T.t3}; }
+        input[type=range] { -webkit-appearance: none; appearance: none; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.08); }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 13px; height: 13px; border-radius: 50%; background: ${T.accent}; cursor: pointer; box-shadow: 0 0 6px ${T.accentGlow}; }
+        input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: ${T.accent}; cursor: pointer; border: none; }
+        @keyframes spin    { to { transform: rotate(360deg); } }
+        @keyframes float   { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        @keyframes fadeUp  { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        .markdown-body h1,.markdown-body h2,.markdown-body h3 { color: ${T.t1}; font-weight:700; margin:.9em 0 .4em; }
+        .markdown-body h1 { font-size:1.3em; } .markdown-body h2 { font-size:1.15em; } .markdown-body h3 { font-size:1.05em; }
         .markdown-body p  { margin:.5em 0; }
         .markdown-body ul,.markdown-body ol { padding-left:1.4em; margin:.5em 0; }
         .markdown-body li { margin:.25em 0; }
-        .markdown-body code { background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.25); border-radius:5px; padding:2px 6px; font-size:.88em; font-family:'Fira Code',monospace; color:#c7d2fe; }
-        .markdown-body pre  { background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px 16px; overflow-x:auto; }
-        .markdown-body pre code { background:none; border:none; padding:0; color:rgba(255,255,255,0.8); }
-        .markdown-body blockquote { border-left:3px solid rgba(99,102,241,0.5); padding-left:12px; color:rgba(255,255,255,0.55); margin:.5em 0; }
-        .markdown-body strong { color:rgba(255,255,255,0.95); font-weight:600; }
-        .markdown-body a { color:#a5b4fc; text-decoration:none; }
+        .markdown-body code { background:${T.accentSoft}; border:1px solid ${T.accentBorder}; border-radius:5px; padding:2px 6px; font-size:.88em; font-family:'Fira Code',monospace; color:${T.accent}; }
+        .markdown-body pre  { background:rgba(0,0,0,0.5); border:1px solid ${T.border}; border-radius:10px; padding:14px 16px; overflow-x:auto; }
+        .markdown-body pre code { background:none; border:none; padding:0; color:${T.t1}; }
+        .markdown-body blockquote { border-left:3px solid ${T.accentBorder}; padding-left:12px; color:${T.t2}; margin:.5em 0; }
+        .markdown-body strong { color:${T.t1}; font-weight:600; }
+        .markdown-body a { color:${T.accent}; text-decoration:none; }
         .markdown-body a:hover { text-decoration:underline; }
         .markdown-body table { border-collapse:collapse; width:100%; margin:.6em 0; }
-        .markdown-body th { background:rgba(99,102,241,0.12); color:rgba(255,255,255,0.85); font-weight:600; padding:7px 11px; border:1px solid rgba(255,255,255,0.08); text-align:left; font-size:12px; }
-        .markdown-body td { padding:6px 11px; border:1px solid rgba(255,255,255,0.06); font-size:13px; color:rgba(255,255,255,0.7); }
+        .markdown-body th { background:${T.accentSoft}; color:${T.t1}; font-weight:600; padding:7px 11px; border:1px solid ${T.border}; text-align:left; font-size:12px; }
+        .markdown-body td { padding:6px 11px; border:1px solid ${T.border}; font-size:13px; color:${T.t2}; }
         .markdown-body tr:nth-child(even) td { background:rgba(255,255,255,0.02); }
       `}</style>
     </div>
