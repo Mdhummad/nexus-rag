@@ -349,14 +349,7 @@ function Empty({ count }) {
           Nexus uses multi-query expansion, MMR and LLM re-ranking to give precise cited answers from your PDFs.
         </div>
       </div>
-      <div style={{ display: "flex", gap: 7, flexWrap: "wrap", justifyContent: "center" }}>
-        {["Multi-query expansion", "MMR diversity filter", "LLM re-ranking", "Streaming answers", "Inline citations"].map(f => (
-          <span key={f} style={{
-            fontSize: 11, padding: "4px 11px", borderRadius: 20,
-            background: T.accentSoft, border: `1px solid ${T.accentBorder}`, color: T.accent,
-          }}>{f}</span>
-        ))}
-      </div>
+
     </div>
   );
   return (
@@ -713,7 +706,7 @@ export default function App() {
 
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.t1 }}>Research Chat</div>
-            <div style={{ fontSize: 10, color: T.t3 }}>Groq · LLaMA 3.1 · Qdrant · Local Embeddings</div>
+            <div style={{ fontSize: 10, color: T.t3 }}>Intelligent document Q&A — powered by Groq &amp; Qdrant</div>
           </div>
 
           {panelMsg && (
