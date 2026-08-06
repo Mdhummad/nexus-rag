@@ -400,7 +400,7 @@ These are intentional tradeoffs for the free-tier deployment target:
 
 ## License
 
-MIT © [Mdhummad](https://github.com/Mdhummad) · [Vaibhavxlegend](https://github.com/VaibhavxLegend)
+MIT © [Mdhummad](https://github.com/Mdhummad) ·
 
 <br/>
 
