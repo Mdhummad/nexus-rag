@@ -1,256 +1,287 @@
-<div align="center">
 
-# ⚡ Nexus RAG
+<p align="center">
+  <img src="frontend/public/logo.png" width="90" height="90" alt="Nexus RAG Logo" style="border-radius:18px"/>
+</p>
 
-### Intelligent Document Q&A 
+<h1 align="center">NEXUS RAG</h1>
 
-**Upload any PDF → Ask questions → Get streamed, cited answers in real time**
+<p align="center">
+  <strong>Ask your documents anything. Get answers that actually cite their sources.</strong><br/>
+  <sub>Multi-query expansion · MMR diversity · LLM re-ranking · Real-time streaming</sub>
+</p>
 
-[🚀 Live Demo](https://nexus-rag-alpha.vercel.app) · 
+<p align="center">
+  <a href="https://nexus-rag-alpha.vercel.app"><img src="https://img.shields.io/badge/LIVE%20DEMO-nexus--rag.vercel.app-f59e0b?style=for-the-badge&labelColor=09090b" alt="Live Demo"/></a>
+</p>
 
-</div>
+<p align="center">
+  <img src="https://img.shields.io/badge/Node.js-22+-339933?style=flat-square&logo=node.js&logoColor=white"/>
+  <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black"/>
+  <img src="https://img.shields.io/badge/Groq-LLaMA_3.1-f59e0b?style=flat-square"/>
+  <img src="https://img.shields.io/badge/Qdrant-Cloud-DC244C?style=flat-square"/>
+  <img src="https://img.shields.io/badge/Deployed_on-Vercel_%2B_Render-000?style=flat-square&logo=vercel"/>
+  <img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square"/>
+</p>
 
----
-
-## 🧠 What Is Nexus RAG?
-
-**Nexus RAG** is a full-stack, production-ready **Retrieval-Augmented Generation (RAG)** system. Upload any PDF — research papers, reports, books, resumes — and ask complex questions across all of them. You get detailed, inline-cited answers grounded exclusively in your documents, streamed word-by-word in real time.
-
-The system implements a **multi-stage intelligent pipeline** far beyond simple vector search:
-
-```
-Your Question
-    │
-    ├─► Query Expansion       LLM generates 2 semantic reformulations → 3 queries total
-    │
-    ├─► Multi-Query Retrieval  All 3 queries searched in Qdrant Cloud simultaneously
-    │
-    ├─► MMR Re-ranking         Maximal Marginal Relevance removes redundant chunks
-    │
-    ├─► LLM Re-ranking         Groq scores each chunk 0.0–1.0 for relevance (parallel)
-    │
-    └─► Streaming Answer       Groq streams a cited, structured answer via SSE
-```
+<br/>
 
 ---
 
-## ✨ Key Features
+<br/>
 
-| Category | Feature |
-|----------|---------|
-| **RAG Pipeline** | Multi-query expansion · MMR diversity · LLM re-ranking · SSE streaming |
-| **UI** | 3-panel layout (Sidebar · Chat · Sources) · Amber dark theme · Real-time pipeline steps |
-| **Citations** | Inline `[Source N, Page P]` with real page numbers from PDF |
-| **Confidence** | Calibrated 0–100% confidence score per answer |
-| **Embeddings** | `all-MiniLM-L6-v2` via `@xenova/transformers` — **on-server, zero API cost** |
-| **Vector DB** | **Qdrant Cloud** — free 1GB, cosine similarity, production-grade |
-| **Metadata** | LLM auto-extracts title, authors, year, abstract on upload |
-| **Storage** | SQLite (WAL mode) for paper metadata — zero-config, concurrent-safe |
-| **Security** | API key auth · Rate limiting · Helmet · Zod validation · XSS protection |
-| **Deploy** | Vercel (frontend) + Render (backend) — **both free tier** |
+## The Problem
+
+You have a 60-page research paper. You need one specific answer. You either read the whole thing or paste chunks into ChatGPT hoping for the best — and receive an answer with zero source references and unknown accuracy.
+
+**Nexus RAG solves this properly.**
+
+Upload any PDF. Ask a question. Get a precise, structured answer that tells you *exactly* which page of *exactly* which document it pulled from — streamed to you word-by-word, with a confidence score.
+
+<br/>
 
 ---
 
-## 🖥️ UI Overview
+<br/>
 
-The interface has **3 panels** and a **live configuration strip**:
+## How It Works
+
+Most RAG systems do: embed → search → answer. That's one step.
+
+Nexus runs **four intelligent stages** before generating a single word:
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│ ☰  NEXUS RAG            Intelligent document Q&A    [Sources] [Clear]  │
-├──────────────────┬─────────────────────────┬──────────────────────────┤
-│  ⚡ Top-K: 5    │  📄 Chunk Size: 1000    │  ≡ Chunk Overlap: 200    │
-│  ════●══════    │  ════════●══════════    │  ══●════════════════     │
-├──────────┬───────┴─────────────────────────┴──────────────────────────┤
-│          │                                          │                  │
-│ PAPERS   │         CHAT MESSAGES                   │  SOURCES PANEL   │
-│          │  User ─────────────────────────────►    │  Confidence bar  │
-│ Upload   │                                          │  Timing badges   │
-│ zone     │  ◉ Nexus ──────────────────────────     │  Query expansions│
-│          │    Streamed answer with markdown...      │  Source cards    │
-│ Paper 1  │    [Source 1, Page 4] ...               │  ─ Paper title   │
-│ Paper 2  │                                          │    Page 3 · 92%  │
-│          │                                          │    ▼ excerpt     │
-├──────────┴─────────────────────────────────────────┴──────────────────┤
-│  [ Ask anything about your documents...                      ] [Send]  │
-└────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                     │
+│   YOUR QUESTION                                                     │
+│        │                                                            │
+│        ▼                                                            │
+│   ① QUERY EXPANSION                                                 │
+│        LLM rewrites your question 2 ways.                           │
+│        Now you have 3 queries instead of 1.                         │
+│        "What is attention?" also becomes                            │
+│        "How does the attention mechanism work in transformers?"     │
+│        │                                                            │
+│        ▼                                                            │
+│   ② MULTI-QUERY RETRIEVAL                                           │
+│        All 3 queries hit Qdrant simultaneously.                     │
+│        384-dimensional cosine similarity.                           │
+│        Duplicates removed. Best candidates surfaced.                │
+│        │                                                            │
+│        ▼                                                            │
+│   ③ MMR RE-RANKING  (Maximal Marginal Relevance)                    │
+│        Removes chunks that say the same thing.                      │
+│        Picks the most relevant AND most diverse set.               │
+│        Your context window isn't wasted.                            │
+│        │                                                            │
+│        ▼                                                            │
+│   ④ LLM RE-RANKING                                                  │
+│        Groq scores each remaining chunk 0.0 → 1.0.                  │
+│        All chunks scored in parallel.                               │
+│        Only the best reach the answer stage.                        │
+│        │                                                            │
+│        ▼                                                            │
+│   STREAMED ANSWER  ──────────────────────────────────────────────► │
+│        Word by word. Cited inline. Confidence-scored.              │
+│        Sources panel updates before the answer even starts.        │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Slider bar (always visible at top):**
-- **Top-K** — how many chunks retrieved per query
-- **Chunk Size** — characters per text chunk (applies on next upload)
-- **Chunk Overlap** — overlap between consecutive chunks
-
-**Pipeline is always fully enabled:** Query Expansion + MMR + LLM Re-ranking run on every query.
+<br/>
 
 ---
 
-## 🏗️ Architecture
+<br/>
+
+## The Interface
+
+Three panels. One purpose.
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     Browser  (Vercel)                        │
-│                                                              │
-│   Sidebar              Chat Area           Sources Panel     │
-│   • Upload PDFs        • SSE streaming     • Confidence bar  │
-│   • Select scope       • Markdown render   • Source cards    │
-│   • Paper list         • Pipeline steps    • Query expansions│
-└────────────────────────────┬─────────────────────────────────┘
-                             │ HTTPS (Fetch / SSE)
-┌────────────────────────────▼─────────────────────────────────┐
-│                  Node.js Backend  (Render)                   │
-│                                                              │
-│  Express.js · helmet · cors · express-rate-limit · zod       │
-│                                                              │
-│  POST /api/papers/upload    → PDF ingestion pipeline         │
-│  GET  /api/papers           → list all papers                │
-│  DELETE /api/papers/:id     → delete paper + vectors         │
-│  POST /api/papers/:id/analyze → deep analysis (5 types)      │
-│  POST /api/query            → standard RAG query             │
-│  POST /api/query/stream     → SSE streaming RAG query        │
-│  GET  /api/health           → health check (public)          │
-│                                                              │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   │
-│  │  ragService │  │ingestionSvc  │  │  analysisService  │   │
-│  │             │  │              │  │                   │   │
-│  │ • Expansion │  │ • pdf-parse  │  │ • summary         │   │
-│  │ • Retrieval │  │ • LLM meta   │  │ • methodology     │   │
-│  │ • MMR       │  │ • Chunking   │  │ • contributions   │   │
-│  │ • Reranking │  │ • Embedding  │  │ • limitations     │   │
-│  │ • Streaming │  │ • Qdrant     │  │ • future_work     │   │
-│  └─────────────┘  └──────────────┘  └───────────────────┘   │
-└────────────────────────────┬─────────────────────────────────┘
-                             │
-          ┌──────────────────┴────────────────┐
-          │                                   │
-   ┌──────▼──────┐                   ┌────────▼───────┐
-   │ Qdrant Cloud│                   │ SQLite (local) │
-   │ (Vectors)   │                   │ (Paper meta)   │
-   │  384-dim    │                   │  WAL mode      │
-   └─────────────┘                   └────────────────┘
+╔══════════════════╦═══════════════════════════════════╦══════════════════╗
+║                  ║  ⚡ 5  │  📄 1000  │  □ 200         ║                  ║
+║   YOUR PAPERS    ╠═══════════════════════════════════╣   SOURCES        ║
+║                  ║                                   ║                  ║
+║  ┌────────────┐  ║  You:                             ║  Confidence: 87% ║
+║  │ • Paper 1  │  ║  ▸ What is self-attention?        ║  ─────────────── ║
+║  │ • Paper 2  │  ║                                   ║  retrieval: 18ms ║
+║  │ • Paper 3  │  ║  Nexus:                           ║  rerank:   340ms ║
+║  └────────────┘  ║  Self-attention allows each       ║                  ║
+║                  ║  position in a sequence to        ║  [1] Attention   ║
+║  Drop PDFs or    ║  attend to all positions          ║  Paper · Page 4  ║
+║  click to upload ║  [Source 1, Page 4]...▍           ║  92% match       ║
+║                  ║                                   ║  ▼ see excerpt   ║
+╚══════════════════╩═══════════════════════════════════╩══════════════════╝
 ```
+
+**Left — Paper Sidebar**
+Upload PDFs (drag & drop or click). Select specific papers to scope your search, or leave all selected to search everything. Papers show title, page count, and chunk count.
+
+**Center — Chat**
+Clean conversation view. Streaming answers appear word-by-word. A live pipeline indicator shows which stage is running. Copy button. Keyboard shortcuts.
+
+**Top Strip — Live Controls**
+Three sliders always visible: **Top-K** (chunks retrieved), **Chunk Size**, **Chunk Overlap**. Adjust before any query. The filled amber track shows your current value at a glance.
+
+**Right — Sources Panel**
+Appears automatically after any answer. Shows the confidence score, timing for each pipeline stage, expanded query variants, and collapsible source cards with excerpt previews.
+
+<br/>
 
 ---
 
-## 🛠️ Tech Stack
+<br/>
 
-| Layer | Technology | Notes |
-|-------|-----------|-------|
-| **Frontend** | React 18 + Vite | SSE streaming, amber dark theme |
-| **Backend** | Node.js 22 + Express.js | ESM modules, graceful shutdown |
-| **LLM** | Groq (LLaMA 3.1-8b-instant) | Fastest free inference |
-| **Embeddings** | `@xenova/transformers` (all-MiniLM-L6-v2) | On-server, no API cost |
-| **Vector DB** | **Qdrant Cloud** | Free 1GB cluster, cosine similarity |
-| **Metadata DB** | better-sqlite3 (WAL mode) | Zero-config, concurrent-safe |
-| **PDF parsing** | pdf-parse | Real per-page text extraction |
-| **Chunking** | LangChain RecursiveCharacterTextSplitter | Configurable size/overlap |
-| **Validation** | Zod | Schema-validated API inputs |
-| **Security** | helmet + express-rate-limit | CSP, HSTS, rate limits |
-| **Deploy** | Vercel + Render | Both free tier |
+## Stack
+
+> Every choice here is deliberate. Nothing added for vanity.
+
+| What | Tool | Why |
+|------|------|-----|
+| **LLM inference** | Groq (LLaMA 3.1-8b-instant) | Fastest available. Free tier is generous. |
+| **Embeddings** | `@xenova/transformers` — all-MiniLM-L6-v2 | Runs inside Node.js. Zero API cost. ~50ms per chunk. |
+| **Vector search** | Qdrant Cloud | Production-grade. Free 1GB cluster. Cosine similarity built in. |
+| **Metadata** | SQLite + better-sqlite3 (WAL mode) | Zero-config. Concurrent-safe. No extra database to manage. |
+| **PDF parsing** | pdf-parse | Extracts text per-page — so citations carry real page numbers. |
+| **Chunking** | LangChain RecursiveCharacterTextSplitter | Splits at paragraph → sentence → word. Configurable from the UI. |
+| **Frontend** | React 18 + Vite | Fast builds. SSE streaming just works. |
+| **Backend** | Node.js 22 + Express.js | ESM, async-first, graceful shutdown on SIGTERM. |
+| **Validation** | Zod | Every API input is schema-validated before touching anything. |
+| **Security** | helmet + express-rate-limit | HSTS, CSP, X-Frame, 15 req/min limit. |
+| **Hosting** | Vercel + Render | Both free tier. Zero DevOps. |
+
+<br/>
 
 ---
 
-## 🚀 Getting Started
+<br/>
 
-### Prerequisites
-- Node.js 22+
-- Free [Qdrant Cloud](https://cloud.qdrant.io) account (no credit card)
-- Free [Groq](https://console.groq.com) API key
+## Quick Start
 
-### Installation
+### 1. Clone
 
 ```bash
-# Clone the repo
 git clone https://github.com/Mdhummad/nexus-rag.git
 cd nexus-rag
+```
 
-# Install backend dependencies
+### 2. Install
+
+```bash
+# Backend
 cd backend && npm install
 
-# Install frontend dependencies
+# Frontend
 cd ../frontend && npm install
 ```
 
-### Environment Variables
+### 3. Configure
 
-Copy `backend/.env.example` to `backend/.env`:
+Create `backend/.env`:
 
 ```env
-GROQ_API_KEY=gsk_your_key_here
-QDRANT_URL=https://your-cluster.us-west-1-0.aws.cloud.qdrant.io
-QDRANT_API_KEY=your_qdrant_api_key
-QDRANT_COLLECTION=research_papers
-CORS_ORIGIN=http://localhost:5173
+# Required
+GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx
+QDRANT_URL=https://your-cluster.aws.cloud.qdrant.io
+QDRANT_API_KEY=your_qdrant_key
+QDRANT_COLLECTION=nexus_papers
+
+# Optional
 PORT=3001
+CORS_ORIGIN=http://localhost:5173
+API_KEY=                     # Leave empty to disable auth in dev
+LLM_MODEL=llama-3.1-8b-instant
+TOP_K=5
+CHUNK_SIZE=1000
+CHUNK_OVERLAP=200
 ```
 
-### Running Locally
+Get your free keys:
+- **Groq** → [console.groq.com](https://console.groq.com) — no credit card
+- **Qdrant** → [cloud.qdrant.io](https://cloud.qdrant.io) — free 1GB cluster
+
+### 4. Run
 
 ```bash
-# Terminal 1 — Backend
-cd backend
-npm run dev
+# Terminal 1
+cd backend && npm run dev
 
-# Terminal 2 — Frontend
-cd frontend
-npm run dev
+# Terminal 2
+cd frontend && npm run dev
+
 # Open http://localhost:5173
 ```
 
----
-
-## ☁️ Deployment
-
-### Backend → Render
-
-1. Connect your GitHub repo to [Render](https://render.com)
-2. New Web Service → Root Dir: `backend` → Build: `npm install` → Start: `node src/server.js`
-3. Add environment variables in Render dashboard:
-   ```
-   GROQ_API_KEY=gsk_...
-   QDRANT_URL=https://your-cluster.aws.cloud.qdrant.io
-   QDRANT_API_KEY=your_key
-   CORS_ORIGIN=https://your-frontend.vercel.app
-   NODE_ENV=production
-   ```
-
-### Frontend → Vercel
-
-1. Connect your GitHub repo to [Vercel](https://vercel.com)
-2. Root Dir: `frontend`
-3. Add environment variable:
-   ```
-   VITE_API_URL=https://your-render-backend.onrender.com
-   ```
-4. Deploy — Vercel handles the build automatically
-
-### Health Check
-
-```
-GET https://your-backend.onrender.com/api/health
-→ { "status": "healthy", "vectorStore": "qdrant", "chunksStored": 0, ... }
-```
+<br/>
 
 ---
 
-## 📡 API Reference
+<br/>
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `GET`    | `/api/health`              | ❌ Public | Health check |
-| `GET`    | `/api/papers`              | ✅ Key | List all papers |
-| `POST`   | `/api/papers/upload`       | ✅ Key | Upload PDF (`multipart/form-data`, field: `file`) |
-| `GET`    | `/api/papers/:id`          | ✅ Key | Get paper by ID |
-| `DELETE` | `/api/papers/:id`          | ✅ Key | Delete paper + all vectors |
-| `POST`   | `/api/papers/:id/analyze`  | ✅ Key | Deep analysis (`{ analysisType }`) |
-| `POST`   | `/api/query`               | ✅ Key | Standard RAG query |
-| `POST`   | `/api/query/stream`        | ✅ Key | SSE streaming RAG query |
+## Deploy
+
+### Backend → Render (free)
+
+| Field | Value |
+|-------|-------|
+| Root Directory | `backend` |
+| Build Command | `npm install` |
+| Start Command | `node src/server.js` |
+| Health Check | `/api/health` |
+
+Set these env vars in Render's dashboard:
+
+```
+GROQ_API_KEY      gsk_...
+QDRANT_URL        https://your-cluster.aws.cloud.qdrant.io
+QDRANT_API_KEY    your_key
+CORS_ORIGIN       https://your-app.vercel.app
+NODE_ENV          production
+API_KEY           any_secret_string
+```
+
+### Frontend → Vercel (free)
+
+| Field | Value |
+|-------|-------|
+| Root Directory | `frontend` |
+| Framework Preset | Vite |
+| Build Command | `npm run build` |
+
+Set this env var:
+
+```
+VITE_API_URL    https://your-backend.onrender.com
+```
+
+That's it. Push to `main` — both platforms auto-deploy.
+
+<br/>
+
+---
+
+<br/>
+
+## API
+
+All endpoints except `/api/health` require `X-API-Key: your_key` header.
+
+```
+GET    /api/health                  → server status + chunk count
+GET    /api/papers                  → list all uploaded papers
+POST   /api/papers/upload           → upload PDF (multipart, field: "file")
+GET    /api/papers/:id              → get one paper by ID
+DELETE /api/papers/:id              → delete paper + all its vectors
+POST   /api/papers/:id/analyze      → deep analysis of a paper
+POST   /api/query                   → full RAG query (returns JSON)
+POST   /api/query/stream            → full RAG query (returns SSE stream)
+```
 
 **Query body:**
 ```json
 {
-  "question": "What is the main contribution?",
-  "paperIds": ["uuid1", "uuid2"],
+  "question": "What optimization algorithm does this paper propose?",
+  "paperIds": null,
   "topK": 5,
   "useQueryExpansion": true,
   "useMMR": true,
@@ -258,88 +289,121 @@ GET https://your-backend.onrender.com/api/health
 }
 ```
 
-**SSE stream events:**
+**Stream events arrive in this order:**
 ```
-data: {"type":"meta",  "sources":[...], "confidence":0.87, "timings":{...}}
-data: {"type":"token", "content":"Hello "}
-data: {"type":"done",  "processingTimeMs":4321}
-data: {"type":"error", "message":"..."}
+data: {"type":"meta",  "sources":[...], "confidence":0.91, "timings":{"expansion":210,"retrieval":18,"reranking":340}}
+data: {"type":"token", "content":"The paper proposes "}
+data: {"type":"token", "content":"Adam with decoupled "}
+...
+data: {"type":"done",  "processingTimeMs":3820}
 ```
 
----
+**Analysis types** (`POST /api/papers/:id/analyze`):
+```json
+{ "analysisType": "summary" }
+{ "analysisType": "methodology" }
+{ "analysisType": "contributions" }
+{ "analysisType": "limitations" }
+{ "analysisType": "future_work" }
+```
 
-## 🔒 Security
-
-- **API key auth** via `X-API-Key` header (optional — dev mode if unset)
-- **Rate limiting** — 15 queries/min, 10 uploads/min per IP
-- **Helmet** — CSP, HSTS, X-Frame-Options, X-Content-Type
-- **Zod validation** — all request bodies schema-validated before processing
-- **CORS** — strict allowlist only, no wildcard
-- **XSS protection** — `rehype-sanitize` on all LLM markdown output
-- **No secrets in code** — all via environment variables
-
----
-
-## ⚡ Performance
-
-| Metric | Value |
-|--------|-------|
-| Embedding model | 384-dim, ~50ms per chunk, on-server |
-| Query expansion | +2 reformulations via LLaMA 3.1 |
-| Qdrant search | ~20ms cosine similarity |
-| LLM re-ranking | Parallel scoring (Promise.all) |
-| Full pipeline | ~3–8s end-to-end (streaming starts ~2s) |
-| Max PDF size | 50MB |
-| Default chunk size | 1000 chars / 200 overlap (configurable in UI) |
+<br/>
 
 ---
 
-## 📁 Project Structure
+<br/>
+
+## Project Structure
 
 ```
 nexus-rag/
+│
 ├── backend/
 │   ├── src/
-│   │   ├── server.js              # Express app, boot sequence, graceful shutdown
+│   │   ├── server.js                   ← entry point, middleware chain, graceful shutdown
+│   │   │
 │   │   ├── middleware/
-│   │   │   ├── auth.js            # API key authentication
-│   │   │   └── upload.js          # Multer — memory storage, PDF validation
+│   │   │   ├── auth.js                 ← X-API-Key header check
+│   │   │   └── upload.js               ← multer, PDF-only, 50MB cap, memoryStorage
+│   │   │
 │   │   ├── routes/
-│   │   │   ├── health.js          # GET /api/health
-│   │   │   ├── papers.js          # Paper CRUD + upload + analysis
-│   │   │   └── query.js           # RAG query (standard + SSE stream)
+│   │   │   ├── health.js               ← GET /api/health (public)
+│   │   │   ├── papers.js               ← upload, list, get, delete, analyze
+│   │   │   └── query.js                ← standard query + SSE stream
+│   │   │
 │   │   └── services/
-│   │       ├── qdrantService.js   # Qdrant Cloud — upsert & cosine search
-│   │       ├── ragService.js      # Full pipeline: expand→retrieve→MMR→rerank→stream
-│   │       ├── ingestionService.js# PDF parse → chunk → embed → Qdrant
-│   │       ├── llmService.js      # Groq LLM factory + local embedding model
-│   │       ├── analysisService.js # Deep paper analysis (5 types)
-│   │       └── database.js        # SQLite paper metadata (WAL mode)
+│   │       ├── ingestionService.js     ← PDF → pages → chunks → embed → Qdrant
+│   │       ├── ragService.js           ← expand → retrieve → MMR → rerank → stream
+│   │       ├── qdrantService.js        ← upsert, search, delete by paperId
+│   │       ├── llmService.js           ← Groq client + local embedding model
+│   │       ├── analysisService.js      ← 5 deep analysis types
+│   │       └── database.js             ← SQLite WAL, paper metadata CRUD
+│   │
 │   ├── .env.example
 │   └── package.json
+│
 ├── frontend/
 │   ├── public/
-│   │   └── logo.png               # App logo
+│   │   └── logo.png
 │   ├── src/
-│   │   ├── App.jsx                # Full UI: 3-panel layout, streaming, sliders
+│   │   ├── App.jsx                     ← entire UI: 3-panel, streaming, sliders
 │   │   ├── hooks/
-│   │   │   └── usePapers.js       # Paper list state + reload
+│   │   │   └── usePapers.js            ← paper list state + reload trigger
 │   │   └── utils/
-│   │       └── api.js             # API client + SSE stream reader
-│   ├── vite.config.js
-│   └── package.json
-├── render.yaml                    # Render deployment config
+│   │       └── api.js                  ← fetch wrapper + SSE ReadableStream reader
+│   └── vite.config.js
+│
+├── render.yaml                         ← Render deployment config
 └── README.md
 ```
 
----
-
-## 🤝 Contributing
-
-Pull requests welcome! Please open an issue first to discuss what you'd like to change.
+<br/>
 
 ---
 
-## 📄 License
+<br/>
+
+## Security
+
+Nothing exposed that shouldn't be.
+
+- **Auth** — `X-API-Key` header on all routes except `/api/health`. Dev mode if `API_KEY` env is unset.
+- **Rate limiting** — 15 queries/min, 10 uploads/min, 20 analysis/min — per IP.
+- **Helmet** — sets CSP, HSTS, X-Frame-Options, X-Content-Type on every response.
+- **CORS** — strict allowlist. No wildcard. Configurable via `CORS_ORIGIN`.
+- **Zod** — every request body is schema-validated before any processing begins.
+- **XSS** — all LLM markdown output is sanitized with `rehype-sanitize` before render.
+- **Secrets** — nothing hardcoded. All via environment variables.
+- **Stack traces** — never leaked to clients in `NODE_ENV=production`.
+
+<br/>
+
+---
+
+<br/>
+
+## Known Limits
+
+These are intentional tradeoffs for the free-tier deployment target:
+
+- **Cold starts on Render** — free tier sleeps after 15 min idle. First request takes ~30s to wake up. Qdrant retries handle this.
+- **Embedding model load** — `all-MiniLM-L6-v2` downloads ~23MB on first start, then stays in RAM. Only happens once per deployment.
+- **No auth system** — there's a single shared API key, not per-user accounts. Add a proper auth layer if building multi-tenant.
+- **SQLite not distributed** — works perfectly on a single Render instance. If you scale horizontally, switch to Postgres.
+- **PDF text only** — scanned PDFs (image-based) won't extract text. Use a PDF with embedded text.
+
+<br/>
+
+---
+
+<br/>
+
+## License
 
 MIT © [Mdhummad](https://github.com/Mdhummad) · [Vaibhavxlegend](https://github.com/VaibhavxLegend)
+
+<br/>
+
+<p align="center">
+  <sub>Built with Groq · Qdrant · React · Node.js</sub>
+</p>
