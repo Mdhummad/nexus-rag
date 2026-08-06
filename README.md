@@ -2,19 +2,11 @@
 
 # ⚡ Nexus RAG
 
-### Intelligent Document Q&A — Powered by Groq & Qdrant
-
-[![Node.js](https://img.shields.io/badge/Node.js-22+-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
-[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
-[![Qdrant](https://img.shields.io/badge/Qdrant_Cloud-Vector_DB-DC244C?style=flat-square)](https://cloud.qdrant.io)
-[![Groq](https://img.shields.io/badge/Groq-LLaMA_3.1-F55036?style=flat-square)](https://console.groq.com)
-[![Vercel](https://img.shields.io/badge/Vercel-Frontend-000?style=flat-square&logo=vercel)](https://vercel.com)
-[![Render](https://img.shields.io/badge/Render-Backend-46E3B7?style=flat-square)](https://render.com)
-[![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
+### Intelligent Document Q&A 
 
 **Upload any PDF → Ask questions → Get streamed, cited answers in real time**
 
-[🚀 Live Demo](https://nexus-rag-alpha.vercel.app) · [🐛 Report Bug](https://github.com/Mdhummad/nexus-rag/issues)
+[🚀 Live Demo](https://nexus-rag-alpha.vercel.app) · 
 
 </div>
 
