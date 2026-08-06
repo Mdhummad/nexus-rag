@@ -732,34 +732,50 @@ export default function App() {
           )}
         </div>
 
-        {/* ─── Top slider bar — 3 sliders side by side ─── */}
+        {/* ─── Premium slider bar ─── */}
         <div style={{
-          display: "flex", alignItems: "center", gap: 0,
+          display: "flex", flexShrink: 0,
           borderBottom: `1px solid ${T.border}`,
-          background: T.surface, flexShrink: 0, padding: "0 16px",
+          background: `linear-gradient(180deg, ${T.surfaceHi} 0%, ${T.surface} 100%)`,
+          borderTop: `2px solid ${T.accentBorder}`,
         }}>
           {[
-            { label: "Top-K Results",  k: "topK",         min: 3,   max: 15,   step: 1   },
-            { label: "Chunk Size",     k: "chunkSize",    min: 400, max: 2000, step: 100 },
-            { label: "Chunk Overlap",  k: "chunkOverlap", min: 0,   max: 400,  step: 50  },
-          ].map((item, i) => (
-            <div key={item.k} style={{
-              flex: 1, padding: "10px 14px",
-              borderLeft: i > 0 ? `1px solid ${T.border}` : "none",
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: T.t2 }}>{item.label}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{pipelineCfg[item.k]}</span>
+            { label: "Top-K Results",  sub: "Chunks per query",       k: "topK",         min: 3,   max: 15,   step: 1,   icon: IC.zap    },
+            { label: "Chunk Size",     sub: "Characters per chunk",   k: "chunkSize",    min: 400, max: 2000, step: 100, icon: IC.file   },
+            { label: "Chunk Overlap",  sub: "Overlap between chunks", k: "chunkOverlap", min: 0,   max: 400,  step: 50,  icon: IC.layers },
+          ].map((item, i) => {
+            const val = pipelineCfg[item.k];
+            const pct = ((val - item.min) / (item.max - item.min)) * 100;
+            return (
+              <div key={item.k}
+                style={{ flex: 1, padding: "12px 18px", borderLeft: i > 0 ? `1px solid ${T.border}` : "none", transition: "background .2s" }}
+                onMouseEnter={e => e.currentTarget.style.background = T.accentSoft}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.accent, flexShrink: 0 }}>
+                      <Ic d={item.icon} size={13} sw={2} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.t1, lineHeight: 1.2 }}>{item.label}</div>
+                      <div style={{ fontSize: 10, color: T.t3 }}>{item.sub}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: T.accent, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, borderRadius: 7, padding: "2px 10px", minWidth: 42, textAlign: "center" }}>
+                    {val}
+                  </div>
+                </div>
+                <input type="range" min={item.min} max={item.max} step={item.step} value={val}
+                  onChange={e => setPipelineCfg(p => ({ ...p, [item.k]: Number(e.target.value) }))}
+                  style={{ width: "100%", cursor: "pointer", appearance: "none", WebkitAppearance: "none", height: 4, borderRadius: 4, outline: "none", border: "none", background: `linear-gradient(to right, ${T.accent} ${pct}%, rgba(255,255,255,0.09) ${pct}%)` }}
+                />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: T.t3, marginTop: 5 }}>
+                  <span>{item.min}</span><span>{item.max}</span>
+                </div>
               </div>
-              <input type="range" min={item.min} max={item.max} step={item.step} value={pipelineCfg[item.k]}
-                onChange={e => setPipelineCfg(p => ({ ...p, [item.k]: Number(e.target.value) }))}
-                style={{ width: "100%", accentColor: T.accent, cursor: "pointer" }}
-              />
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: T.t3, marginTop: 1 }}>
-                <span>{item.min}</span><span>{item.max}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Chat + sources panel */}
@@ -838,9 +854,10 @@ export default function App() {
         ::-webkit-scrollbar-thumb { background: rgba(245,158,11,0.15); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(245,158,11,0.3); }
         textarea::placeholder { color: ${T.t3}; }
-        input[type=range] { -webkit-appearance: none; appearance: none; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.08); }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 13px; height: 13px; border-radius: 50%; background: ${T.accent}; cursor: pointer; box-shadow: 0 0 6px ${T.accentGlow}; }
-        input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: ${T.accent}; cursor: pointer; border: none; }
+        input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 4px; outline: none; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: ${T.accent}; cursor: pointer; box-shadow: 0 0 0 3px ${T.accentSoft}, 0 0 8px ${T.accentGlow}; border: 2px solid ${T.bg}; transition: transform .15s; }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+        input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: ${T.accent}; cursor: pointer; border: 2px solid ${T.bg}; }
         @keyframes spin    { to { transform: rotate(360deg); } }
         @keyframes float   { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
         @keyframes fadeUp  { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
