@@ -10,7 +10,7 @@ router.get("/", async (_req, res) => {
             status:         "healthy",
             vectorStore:    "qdrant",
             chunksStored:   chunks,
-            llmModel:       process.env.LLM_MODEL       || "llama-3.1-8b-instant",
+            llmModel:       process.env.LLM_MODEL       || "llama3-8b-8192",
             embeddingModel: process.env.EMBEDDING_MODEL || "Xenova/all-MiniLM-L6-v2",
             timestamp:      new Date().toISOString(),
         });

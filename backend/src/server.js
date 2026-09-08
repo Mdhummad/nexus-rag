@@ -81,7 +81,7 @@ async function boot() {
             console.log(`\n[3/3] Server running → http://localhost:${PORT}`);
             console.log(`      Health check  → http://localhost:${PORT}/api/health`);
             console.log(`      Auth          → ${process.env.API_KEY ? "enabled (X-API-Key)" : "disabled (dev mode)"}`);
-            console.log(`      LLM model     → ${process.env.LLM_MODEL || "llama-3.1-8b-instant"} (Groq)`);
+            console.log(`      LLM model     → ${process.env.LLM_MODEL || "llama3-8b-8192"} (Groq)`);
             console.log(`      Embed model   → ${process.env.EMBEDDING_MODEL || "Xenova/all-MiniLM-L6-v2"} (local)\n`);
         });
     } catch (err) {
