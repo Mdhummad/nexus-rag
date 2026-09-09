@@ -13,8 +13,12 @@ import healthRouter from "./routes/health.js";
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
+// ── Trust proxy — required on Render/Vercel (sits behind reverse proxy) ───────
+app.set("trust proxy", 1);
+
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet());
+
 
 // ── CORS — strict explicit allow-list only ────────────────────────────────────
 const allowedOrigins = process.env.CORS_ORIGIN
