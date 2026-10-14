@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { initQdrant } from "./services/qdrantService.js";
 import { getDb } from "./services/database.js";
 import { apiKeyAuth } from "./middleware/auth.js";
+import { getEmbeddings } from "./services/llmService.js";
 import papersRouter from "./routes/papers.js";
 import queryRouter  from "./routes/query.js";
 import healthRouter from "./routes/health.js";
@@ -77,15 +78,23 @@ async function boot() {
         getDb();
         console.log("      SQLite ready ✓");
 
-        console.log("[2/3] Initializing Qdrant...");
+        console.log("[2/4] Initializing Qdrant...");
         await initQdrant();
         console.log("      Qdrant ready ✓");
 
+        console.log("[3/4] Pre-warming embedding model (downloads on first boot)...");
+        try {
+            await getEmbeddings().embedQuery("warmup");
+            console.log("      Embedding model ready ✓");
+        } catch (e) {
+            console.warn("      Embedding model pre-warm failed (will retry on first request):", e.message);
+        }
+
         server = app.listen(PORT, () => {
-            console.log(`\n[3/3] Server running → http://localhost:${PORT}`);
+            console.log(`\n[4/4] Server running → http://localhost:${PORT}`);
             console.log(`      Health check  → http://localhost:${PORT}/api/health`);
             console.log(`      Auth          → ${process.env.API_KEY ? "enabled (X-API-Key)" : "disabled (dev mode)"}`);
-            console.log(`      LLM model     → ${process.env.LLM_MODEL || "qwen/qwen3.6-27b"} (Groq)`);
+            console.log(`      LLM model     → ${process.env.LLM_MODEL || "openai/gpt-oss-20b"} (Groq)`);
             console.log(`      Embed model   → ${process.env.EMBEDDING_MODEL || "Xenova/all-MiniLM-L6-v2"} (local)\n`);
         });
     } catch (err) {
