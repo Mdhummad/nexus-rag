@@ -25,12 +25,14 @@ export async function initQdrant() {
         checkCompatibility: false,   // skip version-mismatch warning
     });
 
-    // Verify connection
+    // Verify connection — warn instead of crash so server stays up even if Qdrant is paused
     try {
         await _client.getCollections();
         console.log("[Qdrant] Connection verified ✓");
+        _ready = true;
     } catch (err) {
-        throw new Error(`Qdrant unreachable: ${err.message}`);
+        console.warn(`[Qdrant] WARNING: Qdrant unreachable at boot (${err.message}). Server will start anyway — uploads/queries will fail until Qdrant is reachable.`);
+        return; // don't crash — let server boot and serve health checks
     }
 
     // Create collection if it doesn't exist
