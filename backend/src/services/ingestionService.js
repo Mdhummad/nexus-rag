@@ -11,19 +11,28 @@ const CHUNK_OVERLAP = parseInt(process.env.CHUNK_OVERLAP) || 200;
 
 async function extractMetadata(text) {
     try {
-        const llm    = getLLM({ temperature: 0 });
+        const llm    = getLLM({ temperature: 0, maxTokens: 300 });
         const parser = new StringOutputParser();
-        // Direct messages — no template parsing so {curly braces} in PDFs never crash
-        const result = await llm.invoke([
-            new SystemMessage(`Extract metadata from this document text.
+
+        // 15s timeout — slow/unavailable models fall back to filename gracefully
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("metadata timeout")), 15000)
+        );
+
+        const result = await Promise.race([
+            llm.invoke([
+                new SystemMessage(`Extract metadata from this document text.
 Return ONLY valid JSON with these keys (use null if not found):
 - title: string or null
 - authors: array of strings or null
 - abstract: string (max 400 chars) or null
 - year: number or null
 JSON only, no explanation, no markdown.`),
-            new HumanMessage(text.slice(0, 2000)),
+                new HumanMessage(text.slice(0, 2000)),
+            ]),
+            timeoutPromise,
         ]);
+
         const raw     = await parser.invoke(result);
         const cleaned = raw.replace(/```(?:json)?|```/g, "").trim();
         return JSON.parse(cleaned);
