@@ -35,11 +35,15 @@ const AnalyzeSchema = z.object({
 router.post("/upload", uploadLimiter, upload.single("file"), async (req, res, next) => {
     try {
         if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+        req.setTimeout(300_000); // 5-minute hard limit
         console.log(`\n[Upload] ${req.file.originalname}`);
         const paper = await ingestPaper(req.file.buffer, req.file.originalname);
         insertPaper(paper);   // atomic SQLite write
         res.status(201).json(paper);
     } catch (err) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(413).json({ error: "File too large. Maximum size is 50MB." });
+        }
         next(err);
     }
 });

@@ -24,17 +24,23 @@ app.use(helmet());
 // ── CORS — strict explicit allow-list only ────────────────────────────────────
 const allowedOrigins = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
-    : ["http://localhost:5173", "http://localhost:3000"];
+    : [];
 
 app.use(cors({
     origin: (origin, cb) => {
-        // Allow requests with no origin (Render health checks, curl)
+        // Allow requests with no origin (Render health checks, curl, mobile)
         if (!origin) return cb(null, true);
+        // Allow all Vercel deployments (production + preview branches)
+        if (origin.endsWith(".vercel.app")) return cb(null, true);
+        // Allow localhost for dev
+        if (origin.startsWith("http://localhost:")) return cb(null, true);
+        // Allow any explicitly listed origins
         if (allowedOrigins.includes(origin)) return cb(null, true);
         cb(new Error(`CORS: origin "${origin}" not allowed`));
     },
     credentials: true,
 }));
+
 
 // ── Body parsing — conservative limits ───────────────────────────────────────
 app.use(express.json({ limit: "1mb" }));

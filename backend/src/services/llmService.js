@@ -33,12 +33,11 @@ export function getEmbeddings() {
     return {
         async embedDocuments(texts) {
             const embedder = await getEmbedder();
-            const results = [];
-            for (const text of texts) {
-                const output = await embedder(text, { pooling: "mean", normalize: true });
-                results.push(Array.from(output.data));
-            }
-            return results;
+            // Parallel — embed all texts concurrently instead of one-by-one
+            const outputs = await Promise.all(
+                texts.map((t) => embedder(t, { pooling: "mean", normalize: true }))
+            );
+            return outputs.map((o) => Array.from(o.data));
         },
         async embedQuery(text) {
             const embedder = await getEmbedder();
